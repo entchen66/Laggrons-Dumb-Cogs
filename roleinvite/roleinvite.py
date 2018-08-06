@@ -1,15 +1,14 @@
 # RoleInvite by retke, aka El Laggron
 
 import asyncio
-import discord
 import logging
+import discord
 
 from discord.ext import commands
 from discord.utils import get
 from redbot.core import Config
 from redbot.core import checks
 from redbot.core.i18n import cog_i18n, Translator
-from redbot.core.utils.chat_formatting import pagify
 
 from .api import API
 from .errors import Errors
@@ -76,24 +75,24 @@ class RoleInvite:
             return (
                 message.author == ctx.author
                 and message.channel == ctx.channel
-                and message.content in ["yes", "no"]
+                and message.content.lower() in [_("yes"), _("no")]
             )
 
         try:
             response = await self.bot.wait_for("message", timeout=120, check=confirm)
         except asyncio.TimeoutError:
-            await ctx.send("Question timed out.")
+            await ctx.send(_("Request timed out."))
             return False
 
-        if response.content == "no":
-            await ctx.send("Aborting...")
+        if response.content.lower() == _("no"):
+            await ctx.send(_("Aborting..."))
             return False
         else:
             return True
 
     async def invite_not_found(self, ctx):
         # used if the invite gave isn't found
-        await ctx.send("That invite cannot be found")
+        await ctx.send(_("That invite cannot be found"))
 
     async def update_invites(self):
         # this will update every invites uses count
@@ -159,13 +158,16 @@ class RoleInvite:
 
         Example: `[p]roleset add https://discord.gg/laggron Member`
         If this message still shows after using the command, you probably gave a wrong role name.
-        If you want to link roles to the main autorole system (user joined with an unknown invite), give `main` instead of a discord invite.
-        If you want to link roles to the default autorole system (roles given regardless of the invite used), give `default` instead of a discord invite.
+        If you want to link roles to the main autorole system (user joined with an unknown invite),
+        give `main` instead of a discord invite.
+        If you want to link roles to the default autorole system (roles given regardless of the
+        invite used), give `default` instead of a discord invite'.
         """
 
         async def roles_iteration(invite: str):
             if invite in bot_invites:
-                # that means that the invite is already registered, and another role is going to be added
+                # means that the invite is already registered, we will append the role
+                # to the existing list
                 current_roles = []
 
                 for x in bot_invites[invite]["roles"]:
@@ -178,7 +180,7 @@ class RoleInvite:
 
                     elif x == role.id:
                         # the role that needs to be added is already linked
-                        await ctx.send("That role is already linked to the invite.")
+                        await ctx.send(_("That role is already linked to the invite."))
                         return False
 
                     else:
@@ -188,12 +190,13 @@ class RoleInvite:
                     return True
 
                 await ctx.send(
-                    "**WARNING**: This invite is already registered and currently linked to the role(s) `{}`.\n"
-                    "If you continue, this invite will give all roles given to the new member. \n"
-                    "If you want to edit it, first delete the link using `{}roleset remove`.\n\n"
-                    "Do you want to link this invite to {} roles? (yes/no)".format(
-                        "`, `".join(current_roles), ctx.prefix, len(current_roles) + 1
-                    )
+                    _(
+                        "**WARNING**: This invite is already registered and currently linked to "
+                        "the role(s) `{}`.\nIf you continue, this invite will give all roles "
+                        "given to the new member. \nIf you want to edit it, first delete the link "
+                        "using `{}roleset remove`.\n\nDo you want to link this invite to {} "
+                        "roles? (yes/no)"
+                    ).format("`, `".join(current_roles), ctx.prefix, len(current_roles) + 1)
                 )
 
                 await self.data.guild(ctx.guild).invites.set(bot_invites)
@@ -202,7 +205,7 @@ class RoleInvite:
             return True
 
         if role.position >= ctx.guild.me.top_role.position:
-            await ctx.send("That role is higher than mine. I can't add it to new users.")
+            await ctx.send(_("That role is higher than mine. I can't add it to new users."))
             return
 
         if await commands.InviteConverter.convert(self, ctx, invite):
@@ -210,7 +213,7 @@ class RoleInvite:
             try:
                 guild_invites = await ctx.guild.invites()
             except discord.errors.Forbidden:
-                await ctx.send("I lack the `Manage server` permission.")
+                await ctx.send(_("I lack the `Manage server` permission."))
                 return
 
             # splitting the string so https://discord.gg/abc becomes abc
@@ -223,7 +226,7 @@ class RoleInvite:
                 return
 
             if guild_invites == []:
-                await ctx.send("There are no invites generated on this server.")
+                await ctx.send(_("There are no invites generated on this server."))
                 return
 
         elif invite == "main":
@@ -231,7 +234,7 @@ class RoleInvite:
             try:
                 guild_invites = await ctx.guild.invites()
             except discord.errors.Forbidden:
-                await ctx.send("I lack the `Manage server` permission.")
+                await ctx.send(_("I lack the `Manage server` permission."))
             return
 
         elif invite != "default":
@@ -246,10 +249,10 @@ class RoleInvite:
                 return
             await self.api.add_invite(ctx.guild, "main", [role.id])
             await ctx.send(
-                "The role `{}` is now linked to the main autorole system. "
-                "(new members will get it if they join with an invite not registered)".format(
-                    role.name
-                )
+                _(
+                    "The role `{}` is now linked to the main autorole system. "
+                    "(new members will get it if they join with an invite not registered)"
+                ).format(role.name)
             )
             return
 
@@ -258,10 +261,10 @@ class RoleInvite:
                 return
             await self.api.add_invite(ctx.guild, "default", [role.id])
             await ctx.send(
-                "The role `{}` is now linked to the default autorole system. "
-                "(new members will always get this role, whatever invite he used.)".format(
-                    role.name
-                )
+                _(
+                    "The role `{}` is now linked to the default autorole system. "
+                    "(new members will always get this role, whatever invite he used.)"
+                ).format(role.name)
             )
             return
 
@@ -272,7 +275,7 @@ class RoleInvite:
                     return
                 await self.api.add_invite(ctx.guild, invite.url, [role.id])
                 await ctx.send(
-                    "The role `{}` is now linked to the invite {}".format(role.name, invite.url)
+                    _("The role `{}` is now linked to the invite {}").format(role.name, invite.url)
                 )
                 return
 
@@ -282,16 +285,17 @@ class RoleInvite:
     async def remove(self, ctx, invite: str, *, role: discord.Role = None):
         """
         Remove a link in this server
-        
+
         Specify a `role` to only remove one role from the invite link list.
         Don't specify anything if you want to remove the invite itself.
-        If you want to edit the main/default autorole system's roles, give `main`/`default` instead of a discord invite.
+        If you want to edit the main/default autorole system's roles, give `main`/`default` instead
+        of a discord invite.
         """
 
         bot_invites = await self.data.guild(ctx.guild).invites()
 
         if invite not in bot_invites:
-            await ctx.send("That invite cannot be found")
+            await ctx.send(_("That invite cannot be found"))
             return
 
         for bot_invite_str, bot_invite in bot_invites.items():
@@ -303,27 +307,25 @@ class RoleInvite:
                     roles = [get(ctx.guild.roles, id=x) for x in bot_invite["roles"]]
 
                     if invite == "main":
-                        message = "You're about to remove all roles linked to the main autorole.\n"
+                        message = _(
+                            "You're about to remove all roles linked to the main autorole.\n"
+                        )
                     elif invite == "default":
-                        message = (
+                        message = _(
                             "You're about to remove all roles linked to the default autorole.\n"
                         )
                     else:
-                        message = "You're about to remove all roles linked to this invite.\n"
+                        message = _("You're about to remove all roles linked to this invite.\n")
 
-                    message += (
-                        "```Diff\n"
-                        "List of roles:\n\n"
-                        "+ {}\n"
-                        "```\n\n"
-                        "Proceed? (yes/no)\n\n".format("\n+ ".join([x.name for x in roles]))
-                    )
+                    message += _(
+                        "```Diff\n" "List of roles:\n\n" "+ {}\n" "```\n\n" "Proceed? (yes/no)\n\n"
+                    ).format("\n+ ".join([x.name for x in roles]))
 
                     if len(bot_invite["roles"]) > 1:
-                        message += (
+                        message += _(
                             "Remember that you can remove a single role from this list by typing "
-                            "`{}roleset remove {} [role name]`".format(ctx.prefix, invite)
-                        )
+                            "`{}roleset remove {} [role name]`"
+                        ).format(ctx.prefix, invite)
 
                     await ctx.send(message)
 
@@ -331,32 +333,34 @@ class RoleInvite:
                         return
 
                     await self.api.remove_invite(ctx.guild, invite=invite)
-                    await ctx.send("The invite {} has been removed from the list.".format(invite))
+                    await ctx.send(
+                        _("The invite {} has been removed from the list.").format(invite)
+                    )
                     return  # prevents a RuntimeError because of dict changes
 
                 else:
                     # user will remove only one role from the invite link
 
                     if invite == "main":
-                        message = "You're about to unlink the `{}` role from the main autorole.".format(
-                            role.name
-                        )
+                        message = _(
+                            "You're about to unlink the `{}` role from the main autorole."
+                        ).format(role.name)
                     elif invite == "default":
-                        message = "You're about to unlink the `{}` role from the default autorole.".format(
-                            role.name
-                        )
+                        message = _(
+                            "You're about to unlink the `{}` role from the default autorole."
+                        ).format(role.name)
                     else:
-                        message = "You're about to unlink the `{}` role from the invite {}.".format(
-                            role.name, invite
-                        )
-                    await ctx.send(message + "\nProceed? (yes/no)")
+                        message = _(
+                            "You're about to unlink the `{}` role from the invite {}."
+                        ).format(role.name, invite)
+                    await ctx.send(message + _("\nProceed? (yes/no)"))
 
                     if not await self.check(ctx):  # the user answered no
                         return
 
                     await self.api.remove_invite(ctx.guild, invite, [role.id])
                     await ctx.send(
-                        "The role `{}` is unlinked from the invite {}".format(
+                        _("The role `{}` is unlinked from the invite {}").format(
                             role.name, bot_invite_str
                         )
                     )
@@ -377,7 +381,7 @@ class RoleInvite:
 
             if all(i != x for x in ["default", "main"]):
                 try:
-                    invite = await self.bot.get_invite(i)
+                    await self.bot.get_invite(i)
                 except discord.errors.NotFound:
                     to_delete.append(i)  # if the invite got deleted
 
@@ -386,28 +390,34 @@ class RoleInvite:
                 roles.append(get(ctx.guild.roles, id=role))
 
             embed = discord.Embed()
-            embed.color = ctx.guild.me.color
+            embed.colour = ctx.guild.me.color
             if i == "main":
                 embed.add_field(
-                    name="Roles linked to the main autorole",
+                    name=_("Roles linked to the main autorole"),
                     value="\n".join([x.name for x in roles]),
                 )
                 embed.set_footer(
-                    text="These roles are given if the member joined with an other invite than those linked"
+                    text=_(
+                        "These roles are given if the member joined "
+                        "with an other invite than those linked"
+                    )
                 )
             elif i == "default":
                 embed.add_field(
-                    name="Roles linked to the default autorole",
+                    name=_("Roles linked to the default autorole"),
                     value="\n".join([x.name for x in roles]),
                 )
                 embed.set_footer(
-                    text="These roles are always given to the new members, regardless of the invite used."
+                    text=_(
+                        "These roles are always given to the new members, "
+                        "regardless of the invite used."
+                    )
                 )
             else:
                 embed.add_field(
-                    name="Roles linked to " + str(i), value="\n".join([x.name for x in roles])
+                    name=_("Roles linked to ") + str(i), value="\n".join([x.name for x in roles])
                 )
-            embed.set_footer(text="These roles are given if the user joined using " + i)
+            embed.set_footer(text=_("These roles are given if the user joined using ") + i)
 
             embeds.append(embed)
 
@@ -417,24 +427,26 @@ class RoleInvite:
 
         if embeds == []:
             await ctx.send(
-                "There is nothing set on RoleInvite. Type `{}roleset` for more informations.".format(
-                    ctx.prefix
-                )
+                _(
+                    "There is nothing set on RoleInvite. Type `{}roleset` for more informations."
+                ).format(ctx.prefix)
             )
             return
 
-        await ctx.send("List of invites linked to an autorole on this server:")
+        await ctx.send(_("List of invites linked to an autorole on this server:"))
         for embed in embeds:
             try:
                 await ctx.send(embed=embed)
             except discord.errors.Forbidden:
-                await ctx.send("I lack the `Embed links` permission.")
+                await ctx.send(_("I lack the `Embed links` permission."))
                 return
 
         if not await self.data.guild(ctx.guild).enabled():
             await ctx.send(
-                "**Info:** RoleInvite is currently disabled and won't give roles on member join.\n"
-                "Type `{}roleset enable` to enable it.".format(ctx.prefix)
+                _(
+                    "**Info:** RoleInvite is currently disabled and won't give roles on member "
+                    "join.\nType `{}roleset enable` to enable it."
+                ).format(ctx.prefix)
             )
 
     @roleset.command()
@@ -442,31 +454,33 @@ class RoleInvite:
         """
         Enable or disabe the autorole system.
 
-        If it was disabled within your action, that means that the bot somehow lost the `manage_roles` permission.
+        If it was disabled within your action, that means that the bot somehow lost the 
+        `manage_roles` permission.
         """
 
         if not ctx.guild.me.guild_permissions.manage_roles:
-            await ctx.send("I lack the `Manage roles` permission.")
+            await ctx.send(_("I lack the `Manage roles` permission."))
             return
 
         if not await self.data.guild(ctx.guild).enabled():
             await self.data.guild(ctx.guild).enabled.set(True)
             await ctx.send(
-                "The autorole system is now enabled on this server.\n"
-                "Type `{0.prefix}roleset list` to see what's the current role list.\n"
-                "If the bot lose the `Manage roles` permission, the autorole will be disabled.".format(
-                    ctx
-                )
+                _(
+                    "The autorole system is now enabled on this server.\n"
+                    "Type `{0.prefix}roleset list` to see what's the current role list.\n"
+                    "If the bot lose the `Manage roles` permission, the autorole will be disabled."
+                ).format(ctx)
             )
 
         else:
             await self.data.guild(ctx.guild).enabled.set(False)
             await ctx.send(
-                "The autorole system is now disabled on this server.\n"
-                "Type `{0.prefix}roleset enable` to enable it back.\n\n"
-                "The settings are still saved, and you can also edit them. New members will just be ignored.".format(
-                    ctx
-                )
+                _(
+                    "The autorole system is now disabled on this server.\n"
+                    "Type `{0.prefix}roleset enable` to enable it back.\n\n"
+                    "The settings are still saved, and you can also edit them. "
+                    "New members will just be ignored."
+                ).format(ctx)
             )
 
     @commands.command()
@@ -484,14 +498,14 @@ class RoleInvite:
             for role in roles:
 
                 if invite == "main":
-                    reason = "Joined with an unknown invite, main roles given."
+                    reason = _("Joined with an unknown invite, main roles given.")
                 elif invite == "default":
-                    reason = "Default roles given."
+                    reason = _("Default roles given.")
                 else:
-                    reason = "Joined with " + invite
+                    reason = _("Joined with ") + invite
 
                 try:
-                    await member.add_roles(role, reason="Roleinvite autorole. " + reason)
+                    await member.add_roles(role, reason=_("Roleinvite autorole. ") + reason)
 
                 except discord.errors.Forbidden:
 
@@ -559,7 +573,7 @@ class RoleInvite:
 
         if not await add_roles("main"):
             return
-    
+
     async def on_command_error(self, ctx, error):
         if not isinstance(error, commands.CommandInvokeError):
             return
@@ -569,7 +583,7 @@ class RoleInvite:
         messages = "\n".join(
             [
                 f"{x.author} %bot%: {x.content}".replace("%bot%", "(Bot)" if x.author.bot else "")
-                for x in await ctx.history(limit=5).flatten()
+                for x in await ctx.history(limit=5, reverse=True).flatten()
             ]
         )
         self.sentry.client.extra_context({"GUILD": await self.data.guild(ctx.guild).all()})
