@@ -2,17 +2,29 @@
 
 import asyncio
 import discord
+import logging
 
 from discord.ext import commands
 from discord.utils import get
 from redbot.core import Config
 from redbot.core import checks
+from redbot.core.i18n import cog_i18n, Translator
 from redbot.core.utils.chat_formatting import pagify
 
 from .api import API
 from .errors import Errors
+from .sentry import Sentry
+
+log = logging.getLogger("laggron.roleinvite")
+if logging.getLogger("red").isEnabledFor(logging.DEBUG):
+    # debug mode enabled
+    log.setLevel(logging.DEBUG)
+else:
+    log.setLevel(logging.WARNING)
+_ = Translator("RoleInvite", __file__)
 
 
+@cog_i18n(_)
 class RoleInvite:
     """
     Server autorole following the invite the user used to join the server
@@ -24,6 +36,9 @@ class RoleInvite:
     def __init__(self, bot):
 
         self.bot = bot
+        self.sentry = Sentry(log, self.__version__, bot)
+        if bot.loop.create_task(bot.db.enable_sentry()):
+            self.sentry.enable()
         self.data = Config.get_conf(self, 260)
 
         def_guild = {"invites": {}, "enabled": False}
@@ -31,7 +46,7 @@ class RoleInvite:
         self.api = API(self.bot, self.data)  # loading the API
 
     __author__ = "retke (El Laggron)"
-    __version__ = "Laggrons-Dumb-Cogs/roleinvite beta 2c"
+    __version__ = "1.3.0"
     __info__ = {
         "bot_version": "3.0.0b9",
         "description": (
@@ -454,6 +469,10 @@ class RoleInvite:
                 )
             )
 
+    @commands.command()
+    async def error(self, ctx):
+        raise KeyError("Hello it's RoleInvite")
+
     async def on_member_join(self, member):
         async def add_roles(invite):
             roles = []
@@ -540,3 +559,26 @@ class RoleInvite:
 
         if not await add_roles("main"):
             return
+    
+    async def on_command_error(self, ctx, error):
+        if not isinstance(error, commands.CommandInvokeError):
+            return
+        if not ctx.command.cog_name == self.__class__.__name__:
+            # That error doesn't belong to the cog
+            return
+        messages = "\n".join(
+            [
+                f"{x.author} %bot%: {x.content}".replace("%bot%", "(Bot)" if x.author.bot else "")
+                for x in await ctx.history(limit=5).flatten()
+            ]
+        )
+        self.sentry.client.extra_context({"GUILD": await self.data.guild(ctx.guild).all()})
+        log.error(
+            f"Exception in command '{ctx.command.qualified_name}'.\n\n"
+            f"Myself: {ctx.me}\n"
+            f"Last 5 messages:\n\n{messages}\n\n",
+            exc_info=error.original,
+        )
+
+    def __unload(self):
+        self.sentry.disable()
