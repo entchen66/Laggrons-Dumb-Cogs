@@ -24,14 +24,14 @@ class Sentry:
     def __init__(self, logger: logging.Logger, version: StrictVersion, bot: RedBase):
         self.client = Client(
             dsn=(
-                "https://ff90c52be55a43b1914be6dd26ac7b57:dc1b6820fcfc4a149a2ff276a12b6ccf"
-                "@sentry.io/1253554"
+                "https://569a1369052245218133d2157028e6f6:bea00ed8961e408d8a7988628fe59607"
+                "@sentry.io/1256931"
             ),
             release=version,
         )
-        self.client.environment(f"{platform.system()} ({platform.release()}")
-        self.client.user_context({"id": bot.user.id, "name": bot.user})
-        
+        self.client.environment = f"{platform.system()} ({platform.release()})"
+        self.client.user_context({"id": bot.user.id, "name": str(bot.user)})
+
         self.handler = SentryHandler(self.client)
         self.logger = logger
 
