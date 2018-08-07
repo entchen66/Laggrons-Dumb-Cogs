@@ -47,7 +47,7 @@ class RoleInvite:
     __author__ = "retke (El Laggron)"
     __version__ = "1.3.0"
     __info__ = {
-        "bot_version": "3.0.0b9",
+        "bot_version": "3.0.0b14",
         "description": (
             "Autorole based on the invite the user used.\n"
             "If the user joined using invite x, he will get "
