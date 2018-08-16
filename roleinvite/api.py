@@ -23,9 +23,10 @@ class API:
             version = bot.get_cog('RoleInvite').__version__
     """
 
-    def __init__(self, bot, config):
+    def __init__(self, bot, config, log):
         self.bot = bot
         self.data = config
+        self.log = log
 
     async def has_invites(self, guild):
         """
