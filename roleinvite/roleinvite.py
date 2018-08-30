@@ -4,14 +4,13 @@ import asyncio
 import logging
 import discord
 
-from discord.ext import commands
 from discord.utils import get
+from redbot.core import commands
 from redbot.core import Config
 from redbot.core import checks
 from redbot.core.i18n import cog_i18n, Translator
 
 from .api import API
-from .errors import Errors
 from .sentry import Sentry
 
 log = logging.getLogger("laggron.roleinvite")
@@ -19,7 +18,7 @@ if logging.getLogger("red").isEnabledFor(logging.DEBUG):
     # debug mode enabled
     log.setLevel(logging.DEBUG)
 else:
-    log.setLevel(logging.WARNING)
+    log.setLevel(logging.INFO)
 _ = Translator("RoleInvite", __file__)
 
 
@@ -33,16 +32,19 @@ class RoleInvite:
     """
 
     def __init__(self, bot):
-
         self.bot = bot
+
+        # logging
         self.sentry = Sentry(log, self.__version__, bot)
         if bot.loop.create_task(bot.db.enable_sentry()):
             self.sentry.enable()
-        self.data = Config.get_conf(self, 260)
 
+        self.data = Config.get_conf(self, 260)
         def_guild = {"invites": {}, "enabled": False}
         self.data.register_guild(**def_guild)
-        self.api = API(self.bot, self.data)  # loading the API
+
+        self.api = API(self.bot, self.data, log)  # loading the API
+        bot.loop.create_task(self.api.update_invites())
 
     __author__ = "retke (El Laggron)"
     __version__ = "1.3.0"
@@ -68,8 +70,38 @@ class RoleInvite:
         "tags": ["autorole", "role", "join", "invite"],
     }
 
-    async def check(self, ctx):
-        # Used for author confirmation
+    def _set_context(self, data: dict):
+        """
+        Set any extra context information before logging something.
+        This is an alias of ``self.sentry.client.extra_context()``
+
+        Arguments
+        ---------
+        data: dict
+            The dictionnary that must appear on Sentry panel
+        """
+        self.sentry.client.extra_context(data)
+
+    async def _invite_not_found(self, ctx):
+        """
+        Send a message when the invite given was not found.
+        """
+        return await ctx.send(_("That invite cannot be found"))
+
+    async def _check(self, ctx: commands.Context):
+        """
+        Wait for user input, can be ``yes`` or ``no`` (can be translated).
+
+        Arguments
+        ---------
+        ctx: ~redbot.core.commands.Context
+            The context of the command.
+
+        Returns
+        -------
+        bool
+            :py:obj:`True` if the answer is ``yes``, else :py:obj:`False`.
+        """
 
         def confirm(message):
             return (
@@ -85,71 +117,21 @@ class RoleInvite:
             return False
 
         if response.content.lower() == _("no"):
-            await ctx.send(_("Aborting..."))
+            await ctx.channel.send(_("Aborting..."))
             return False
         else:
             return True
 
-    async def invite_not_found(self, ctx):
-        # used if the invite gave isn't found
-        await ctx.send(_("That invite cannot be found"))
-
-    async def update_invites(self):
-        # this will update every invites uses count
-        # since it could have been modified while the bot was offline
-        # executed on cog load
-
-        bot_invites = await self.data.all_guilds()
-
-        for guild_id in bot_invites:
-
-            guild = self.bot.get_guild(guild_id)
-
-            if guild is None:
-                # bot has left the guild
-                await self.data.guild(guild_id).clear()
-                continue
-
-            if await self.api.has_invites(guild):
-                # we need to request guild invites, which requires manage server perm
-                # if there's only the default autorole, no need to fetch that
-
-                try:
-                    invites = await guild.invites()
-                except discord.errors.Forbidden:
-                    # manage_roles permission was removed
-                    # we disable the autorole to prevent more errors
-                    await self.data.guild(guild).enabled.set(False)
-                    raise Errors.CannotAddRole(
-                        "The manage_roles permission was lost. "
-                        "RoleInvite is now disabled on this guild."
-                    )
-            else:
-                invites = None
-
-            for invite in guild:
-                try:
-                    invite = self.bot.get_invite(invite)
-                except discord.ext.commands.errors.CommandInvokeError:
-                    del invites[invite.url]
-                    continue
-
-                if invites:
-                    invite = get(guild.invites, code=invite.code)
-
-                if not invite:
-                    del invites[invite.url]
-                else:
-                    invites[invite.url]["uses"] = invite.uses
-        await self.data.guild(guild)
-
     @commands.group()
     @checks.admin()
     async def roleset(self, ctx):
-        """Roleinvite cog management"""
+        """
+        Roleinvite cog management
 
-        if not ctx.invoked_subcommand:
-            await ctx.send_help()
+        For a clear explaination of how the cog works, read the documentation.
+        https://laggrons-dumb-cogs.readthedocs.io/
+        """
+        pass
 
     @roleset.command()
     async def add(self, ctx, invite: str, *, role: discord.Role):
@@ -158,10 +140,10 @@ class RoleInvite:
 
         Example: `[p]roleset add https://discord.gg/laggron Member`
         If this message still shows after using the command, you probably gave a wrong role name.
-        If you want to link roles to the main autorole system (user joined with an unknown invite),
+        If you want to link roles to the main autorole system (user joined with an unknown invite),\
         give `main` instead of a discord invite.
-        If you want to link roles to the default autorole system (roles given regardless of the
-        invite used), give `default` instead of a discord invite'.
+        If you want to link roles to the default autorole system (roles given regardless of the\
+        invite used), give `default` instead of a discord invite.
         """
 
         async def roles_iteration(invite: str):
@@ -200,50 +182,36 @@ class RoleInvite:
                 )
 
                 await self.data.guild(ctx.guild).invites.set(bot_invites)
-                if not await self.check(ctx):  # the user answered no
+                if not await self._check(ctx):  # the user answered no
                     return False
             return True
 
         if role.position >= ctx.guild.me.top_role.position:
             await ctx.send(_("That role is higher than mine. I can't add it to new users."))
             return
+        if not ctx.guild.me.guild_permissions.manage_guild:
+            await ctx.send(_("I need the `Manage server` permission!"))
+            return
+        if not ctx.guild.me.guild_permissions.manage_roles:
+            await ctx.send(_("I need the `Add roles` permission!"))
 
-        if await commands.InviteConverter.convert(self, ctx, invite):
+        guild_invites = await ctx.guild.invites()
+        try:
+            invite = await commands.InviteConverter.convert(self, ctx, invite)
+        except (commands.BadArgument, IndexError):
+            if not any(invite == x for x in ["main", "default"]):
+                await self._invite_not_found(ctx)
+                return
+        else:
             # not the default autorole
-            try:
-                guild_invites = await ctx.guild.invites()
-            except discord.errors.Forbidden:
-                await ctx.send(_("I lack the `Manage server` permission."))
+            if invite.channel.guild != ctx.guild:
+                await ctx.send(_("That invite doesn't belong to this server!"))
                 return
-
-            # splitting the string so https://discord.gg/abc becomes abc
-            invite = invite.split("/")
-            invite = invite[len(invite) - 1]
-
-            invite = get(guild_invites, code=invite)
-            if not invite:
-                await self.invite_not_found(ctx)
-                return
-
             if guild_invites == []:
                 await ctx.send(_("There are no invites generated on this server."))
                 return
 
-        elif invite == "main":
-            # not needed atm, but it will be, so we check for the permission
-            try:
-                guild_invites = await ctx.guild.invites()
-            except discord.errors.Forbidden:
-                await ctx.send(_("I lack the `Manage server` permission."))
-            return
-
-        elif invite != "default":
-            # invite is not a discord.Invite nor it is main/default (default autorole)
-            await self.invite_not_found(ctx)
-            return
-
         bot_invites = await self.data.guild(ctx.guild).invites()
-
         if invite == "main":
             if not await roles_iteration(invite):
                 return
@@ -270,7 +238,6 @@ class RoleInvite:
 
         for guild_invite in guild_invites:
             if invite.url == guild_invite.url:
-
                 if not await roles_iteration(invite.url):
                     return
                 await self.api.add_invite(ctx.guild, invite.url, [role.id])
@@ -279,7 +246,7 @@ class RoleInvite:
                 )
                 return
 
-        await self.invite_not_found(ctx)
+        await self._invite_not_found(ctx)
 
     @roleset.command()
     async def remove(self, ctx, invite: str, *, role: discord.Role = None):
@@ -288,84 +255,70 @@ class RoleInvite:
 
         Specify a `role` to only remove one role from the invite link list.
         Don't specify anything if you want to remove the invite itself.
-        If you want to edit the main/default autorole system's roles, give `main`/`default` instead
-        of a discord invite.
+        If you want to edit the main/default autorole system's roles, give \
+        `main`/`default` instead of a discord invite.
         """
-
-        bot_invites = await self.data.guild(ctx.guild).invites()
-
-        if invite not in bot_invites:
+        invites = await self.data.guild(ctx.guild).invites()
+        if invite not in invites:
             await ctx.send(_("That invite cannot be found"))
             return
 
-        for bot_invite_str, bot_invite in bot_invites.items():
-            if bot_invite_str == invite:
+        bot_invite = invites.get(invite)
+        if bot_invite is None:
+            await self._invite_not_found(ctx)
+            return
 
-                if role is None or len(bot_invite["roles"]) <= 1:
-                    # user will unlink the invite from the autorole system
+        if role is None or len(bot_invite["roles"]) <= 1:
+            # user will unlink the invite from the autorole system
+            roles = [get(ctx.guild.roles, id=x) for x in bot_invite["roles"]]
 
-                    roles = [get(ctx.guild.roles, id=x) for x in bot_invite["roles"]]
+            if invite == "main":
+                message = _("You're about to remove all roles linked to the main autorole.\n")
+            elif invite == "default":
+                message = _("You're about to remove all roles linked to the default autorole.\n")
+            else:
+                message = _("You're about to remove all roles linked to this invite.\n")
 
-                    if invite == "main":
-                        message = _(
-                            "You're about to remove all roles linked to the main autorole.\n"
-                        )
-                    elif invite == "default":
-                        message = _(
-                            "You're about to remove all roles linked to the default autorole.\n"
-                        )
-                    else:
-                        message = _("You're about to remove all roles linked to this invite.\n")
+            message += _(
+                "```Diff\n" "List of roles:\n\n" "+ {}\n" "```\n\n" "Proceed? (yes/no)\n\n"
+            ).format("\n+ ".join([x.name for x in roles]))
 
-                    message += _(
-                        "```Diff\n" "List of roles:\n\n" "+ {}\n" "```\n\n" "Proceed? (yes/no)\n\n"
-                    ).format("\n+ ".join([x.name for x in roles]))
+            if len(bot_invite["roles"]) > 1:
+                message += _(
+                    "Remember that you can remove a single role from this list by typing "
+                    "`{}roleset remove {} [role name]`"
+                ).format(ctx.prefix, invite)
 
-                    if len(bot_invite["roles"]) > 1:
-                        message += _(
-                            "Remember that you can remove a single role from this list by typing "
-                            "`{}roleset remove {} [role name]`"
-                        ).format(ctx.prefix, invite)
+            await ctx.send(message)
 
-                    await ctx.send(message)
+            if not await self._check(ctx):  # the user answered no
+                return
 
-                    if not await self.check(ctx):  # the user answered no
-                        return
+            await self.api.remove_invite(ctx.guild, invite=invite)
+            await ctx.send(_("The invite {} has been removed from the list.").format(invite))
 
-                    await self.api.remove_invite(ctx.guild, invite=invite)
-                    await ctx.send(
-                        _("The invite {} has been removed from the list.").format(invite)
-                    )
-                    return  # prevents a RuntimeError because of dict changes
+        else:
+            # user will remove only one role from the invite link
 
-                else:
-                    # user will remove only one role from the invite link
+            if invite == "main":
+                message = _("main autorole.")
+            elif invite == "default":
+                message = _("default autorole.")
+            else:
+                message = _("invite {}.").format(invite)
+            await ctx.send(
+                _("You're about to unlink the `{}` role from the {}\nProceed? (yes/no)").format(
+                    role.name, message
+                )
+            )
 
-                    if invite == "main":
-                        message = _(
-                            "You're about to unlink the `{}` role from the main autorole."
-                        ).format(role.name)
-                    elif invite == "default":
-                        message = _(
-                            "You're about to unlink the `{}` role from the default autorole."
-                        ).format(role.name)
-                    else:
-                        message = _(
-                            "You're about to unlink the `{}` role from the invite {}."
-                        ).format(role.name, invite)
-                    await ctx.send(message + _("\nProceed? (yes/no)"))
+            if not await self._check(ctx):  # the user answered no
+                return
 
-                    if not await self.check(ctx):  # the user answered no
-                        return
-
-                    await self.api.remove_invite(ctx.guild, invite, [role.id])
-                    await ctx.send(
-                        _("The role `{}` is unlinked from the invite {}").format(
-                            role.name, bot_invite_str
-                        )
-                    )
-
-        await self.invite_not_found(ctx)
+            await self.api.remove_invite(ctx.guild, invite, [role.id])
+            await ctx.send(
+                _("The role `{}` is unlinked from the invite {}").format(role.name, invite)
+            )
 
     @roleset.command()
     async def list(self, ctx):
@@ -376,6 +329,10 @@ class RoleInvite:
         invites = await self.data.guild(ctx.guild).invites()
         embeds = []
         to_delete = []
+
+        if not ctx.me.guild_permissions.embed_links:
+            await ctx.send("I need the `Embed links` permission.")
+            return
 
         for i, invite in invites.items():
 
@@ -417,8 +374,9 @@ class RoleInvite:
                 embed.add_field(
                     name=_("Roles linked to ") + str(i), value="\n".join([x.name for x in roles])
                 )
-            embed.set_footer(text=_("These roles are given if the user joined using ") + i)
-
+                embed.set_footer(
+                    text=_("These roles are given if the user joined using {}").format(i)
+                )
             embeds.append(embed)
 
         for deletion in to_delete:
@@ -435,11 +393,7 @@ class RoleInvite:
 
         await ctx.send(_("List of invites linked to an autorole on this server:"))
         for embed in embeds:
-            try:
-                await ctx.send(embed=embed)
-            except discord.errors.Forbidden:
-                await ctx.send(_("I lack the `Embed links` permission."))
-                return
+            await ctx.send(embed=embed)
 
         if not await self.data.guild(ctx.guild).enabled():
             await ctx.send(
@@ -454,26 +408,29 @@ class RoleInvite:
         """
         Enable or disabe the autorole system.
 
-        If it was disabled within your action, that means that the bot somehow lost the 
-        `manage_roles` permission.
+        If it was disabled within your action, that means that the bot somehow lost the\
+        `Manage roles` or the `Manage server` permission.
         """
 
-        if not ctx.guild.me.guild_permissions.manage_roles:
-            await ctx.send(_("I lack the `Manage roles` permission."))
+        if not ctx.me.guild_permissions.manage_roles:
+            await ctx.send(_("I need the `Manage roles` permission."))
             return
+        if not ctx.me.guild_permissions.manage_guild:
+            await ctx.send(_("I need the `Manage server` permission."))
+            return
+        current = not await self.data.guild(ctx.guild).enabled()
+        await self.data.guild(ctx.guild).enabled.set(current)
 
-        if not await self.data.guild(ctx.guild).enabled():
-            await self.data.guild(ctx.guild).enabled.set(True)
+        if current:
             await ctx.send(
                 _(
                     "The autorole system is now enabled on this server.\n"
                     "Type `{0.prefix}roleset list` to see what's the current role list.\n"
-                    "If the bot lose the `Manage roles` permission, the autorole will be disabled."
+                    "If the bot lose the `Manage roles` or the `Manage server` permissions "
+                    ", the autorole will be disabled."
                 ).format(ctx)
             )
-
         else:
-            await self.data.guild(ctx.guild).enabled.set(False)
             await ctx.send(
                 _(
                     "The autorole system is now disabled on this server.\n"
@@ -483,93 +440,126 @@ class RoleInvite:
                 ).format(ctx)
             )
 
+    @commands.command(hidden=True)
+    @checks.is_owner()
+    async def roleinviteinfo(self, ctx):
+        """
+        Get informations about the cog.
+        """
+
+        sentry = _("enabled") if await self.bot.db.enable_sentry() else _("disabled")
+        message = _(
+            "Laggron's Dumb Cogs V3 - roleinvite\n\n"
+            "Version: {0.__version__}\n"
+            "Author: {0.__author__}\n"
+            "Sentry error reporting: {1}\n\n"
+            "Github repository: https://github.com/retke/Laggrons-Dumb-Cogs/tree/v3\n"
+            "Discord server: https://discord.gg/AVzjfpR\n"
+            "Documentation: http://laggrons-dumb-cogs.readthedocs.io/"
+        ).format(self, sentry)
+        await ctx.send(message)
+
     @commands.command()
     async def error(self, ctx):
         raise KeyError("Hello it's RoleInvite")
 
     async def on_member_join(self, member):
         async def add_roles(invite):
+            inv_data = bot_invites[invite]
+            if invite == "main":
+                reason = _("Joined with an unknown invite, main roles given.")
+            elif invite == "default":
+                reason = _("Default roles given.")
+            else:
+                reason = _("Joined with {}").format(invite)
+
             roles = []
-            for role in invites[invite]["roles"]:
+            for role in await self.data.guild(guild).invites.get_raw(invite, "roles"):
                 role = get(guild.roles, id=role)
                 roles.append(role)
 
-            # iterating all roles linked to the autorole
+            # let's check if the request can be done before calling the API
+            if not member.guild.me.guild_permissions.manage_roles:
+                # manage_roles permission was removed
+                # we disable the autorole to prevent more errors
+                await self.data.guild(guild).enabled.set(False)
+                log.warning(
+                    'The "Manage roles" permission was lost. '
+                    "RoleInvite is now disabled on this guild.\n"
+                    f"Guild: {guild.name} (ID: {guild.id})"
+                )
+                return False
+            to_remove = []
             for role in roles:
+                if role.position >= guild.me.top_role.position:
+                    # The role is above or equal to the bot's highest role in the hierarchy
+                    # we're removing this role from the list to prevent more errors
+                    to_remove.append(role)
+            if to_remove != []:
+                roles = [x for x in inv_data["roles"] if x not in [x.id for x in to_remove]]
+                await self.data.guild(guild).invites.set_raw(invite, "roles", value=roles)
+                roles_str = "; ".join([f"{x.name} (ID: {x.id})" for x in to_remove])
+                log.warning(
+                    f"Some roles linked to {invite} were removed because the role "
+                    "hierarchy has changed and the roles are upper than mine.\n"
+                    "To fix this, set my role above those and add them back.\n"
+                    f"Roles removed: {roles_str}\n"
+                    f"Guild: {guild.name} (ID: {guild.id})"
+                )
+            if inv_data["roles"] == []:
+                # all roles were removed due to the position check
+                del bot_invites[invite]
+                await self.data.guild(guild).invites.set(bot_invites)
+                log.warning(
+                    f"Invite {invite} was removed due to missing roles.\n"
+                    f"Guild: {guild.name} (ID: {guild.id})"
+                )
+                return False
 
-                if invite == "main":
-                    reason = _("Joined with an unknown invite, main roles given.")
-                elif invite == "default":
-                    reason = _("Default roles given.")
-                else:
-                    reason = _("Joined with ") + invite
-
-                try:
-                    await member.add_roles(role, reason=_("Roleinvite autorole. ") + reason)
-
-                except discord.errors.Forbidden:
-
-                    if role.position >= guild.me.top_role.position:
-                        # The role is above or equal to the bot's highest role in the hierarchy
-                        # we're removing this role from the list to prevent more errors
-                        invites[invite.url]["roles"].remove(role.id)
-                        raise Errors.CannotAddRole(
-                            "Role {} is too high in the role hierarchy. "
-                            "Now removed from the list."
-                        )
-
-                    if not member.guild.me.guild_permissions.manage_roles:
-                        # manage_roles permission was removed
-                        # we disable the autorole to prevent more errors
-                        await self.data.guild(guild).enabled.set(False)
-                        raise Errors.CannotAddRole(
-                            "The manage_roles permission was lost. "
-                            "RoleInvite is now disabled on this guild."
-                        )
+            await member.add_roles(*roles, reason=_("Roleinvite autorole. ") + reason)
             return True
 
         guild = member.guild
-        invites = await self.data.guild(guild).invites()
-
         if not await self.data.guild(guild).enabled():
             return  # autorole disabled
+        bot_invites = await self.data.guild(guild).invites()
+
+        try:
+            guild_invites = await guild.invites()
+        except discord.errors.Forbidden:
+            # manage guild permission removed
+            # we disable the autorole to prevent more errors
+            await self.data.guild(guild).enabled.set(False)
+            log.warning(
+                'The "Manage server" permission was lost. '
+                "RoleInvite is now disabled on this guild.\n"
+                f"Guild: {guild.name} (ID: {guild.id})"
+            )
+            return
 
         if not await add_roles("default"):
             return
 
-        if await self.api.has_invites(guild):
-            try:
-                guild_invites = await guild.invites()
-            except discord.errors.Forbidden:
-                # manage guild permission removed
-                # we disable the autorole to prevent more errors
-                await self.data.guild(guild).enabled.set(False)
-                raise Errors.CannotGetInvites(
-                    "The manage_server permission was lost. "
-                    "RoleInvite is now disabled on this guild."
-                )
-        else:
-            return
-
-        for invite in invites:
+        for invite in bot_invites:
 
             if any(invite == x for x in ["default", "main"]):
                 continue
 
             invite = get(guild_invites, url=invite)
             if not invite:
-                del invites[invite.url]
+                del bot_invites[invite.url]
             else:
-                if invite.uses > invites[invite.url]["uses"]:
+                if invite.uses > bot_invites[invite.url]["uses"]:
                     # the invite has more uses than what we registered before
                     # this is the one used by the member
 
                     if not await add_roles(invite.url):
                         return
 
-                    invites[invite.url]["uses"] = invite.uses  # updating uses count
-                    await self.data.guild(guild).invites.set(invites)
-                    return  # so it won't iterate other invites registered
+                    await self.data.guild(guild).invites.set_raw(
+                        invite.url, "uses", value=invite.uses
+                    )
+                    return  # so it won't add "main" roles
 
         if not await add_roles("main"):
             return
@@ -586,13 +576,25 @@ class RoleInvite:
                 for x in await ctx.history(limit=5, reverse=True).flatten()
             ]
         )
-        self.sentry.client.extra_context({"GUILD": await self.data.guild(ctx.guild).all()})
+        log.propagate = False  # let's remove console output for this since Red already handle this
+        self._set_context(
+            {
+                "config": await self.data.guild(ctx.guild).all(),
+                "guild": f"{ctx.guild.name} (ID: {ctx.guild.id})",
+                "command": {
+                    "invoked": f"{ctx.author} (ID: {ctx.author.id})",
+                    "command": f"{ctx.command.name} (cog: {ctx.cog})",
+                },
+            }
+        )
         log.error(
             f"Exception in command '{ctx.command.qualified_name}'.\n\n"
             f"Myself: {ctx.me}\n"
             f"Last 5 messages:\n\n{messages}\n\n",
             exc_info=error.original,
         )
+        log.propagate = True  # re-enable console output for warnings
+        self._set_context({})  # remove context for future logs
 
     def __unload(self):
         self.sentry.disable()
