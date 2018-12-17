@@ -24,7 +24,7 @@ def create_log(cog_path: pathlib.Path):
 
 
 def setup(bot):
+    create_cache(cog_data_path(None, raw_name="RoleInvite"))
+    create_log(cog_data_path(None, raw_name="RoleInvite"))
     n = RoleInvite(bot)
-    create_cache(cog_data_path(n))
-    create_log(cog_data_path(n))
     bot.add_cog(n)
