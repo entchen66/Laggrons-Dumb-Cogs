@@ -7,7 +7,7 @@ def create_cache(cog_path: pathlib.Path):
     if not cog_path.exists():
         return
     path = cog_path / "cache"
-    directories = [x for x in path.iterdir() if x.is_dir()]
+    directories = [x for x in cog_path.iterdir() if x.is_dir()]
     if path not in directories:
         path.mkdir()
 
@@ -16,7 +16,7 @@ def create_log(cog_path: pathlib.Path):
     if not cog_path.exists():
         return
     path = cog_path / "logs"
-    directories = [x for x in path.iterdir() if x.is_dir()]
+    directories = [x for x in cog_path.iterdir() if x.is_dir()]
     if path not in directories:
         path.mkdir()
         (path / "error.log").touch()
