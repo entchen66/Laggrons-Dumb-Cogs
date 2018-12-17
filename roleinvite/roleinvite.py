@@ -23,7 +23,7 @@ _ = Translator("RoleInvite", __file__)
 
 
 @cog_i18n(_)
-class RoleInvite:
+class RoleInvite(commands.Cog):
     """
     Server autorole following the invite the user used to join the server
 
@@ -465,7 +465,7 @@ class RoleInvite:
 
     async def on_member_join(self, member):
         async def add_roles(invite):
-            inv_data = bot_invites[invite]
+            invites_data = bot_invites[invite]
             if invite == "main":
                 reason = _("Joined with an unknown invite, main roles given.")
             elif invite == "default":
@@ -473,10 +473,25 @@ class RoleInvite:
             else:
                 reason = _("Joined with {}").format(invite)
 
-            roles = []
-            for role in await self.data.guild(guild).invites.get_raw(invite, "roles"):
-                role = get(guild.roles, id=role)
-                roles.append(role)
+            roles_data = invites_data["roles"]
+            roles = []  # roles object to add to the member
+            to_remove = []  # lost roles
+            for role_id in roles_data:
+                role = get(guild.roles, id=role_id)
+                if role is None:
+                    to_remove.append(role_id)
+                else:
+                    roles.append(role)
+            if to_remove:
+                roles_id_str = ", ".join([str(x) for x in to_remove])
+                log.warning(
+                    "Removing the following roles because they were not found on the server.\n"
+                    f"Roles ID: {roles_id_str}\n"
+                    f"Guild: {guild.name} (ID: {guild.id})"
+                )
+                await self.data.guild(guild).invites.set_raw(
+                    invite, "roles", value=[x for x in roles_data if x not in to_remove]
+                )
 
             # let's check if the request can be done before calling the API
             if not member.guild.me.guild_permissions.manage_roles:
@@ -496,7 +511,7 @@ class RoleInvite:
                     # we're removing this role from the list to prevent more errors
                     to_remove.append(role)
             if to_remove != []:
-                roles = [x for x in inv_data["roles"] if x not in [x.id for x in to_remove]]
+                roles = [x for x in invites_data["roles"] if x not in [x.id for x in to_remove]]
                 await self.data.guild(guild).invites.set_raw(invite, "roles", value=roles)
                 roles_str = "; ".join([f"{x.name} (ID: {x.id})" for x in to_remove])
                 log.warning(
@@ -506,8 +521,8 @@ class RoleInvite:
                     f"Roles removed: {roles_str}\n"
                     f"Guild: {guild.name} (ID: {guild.id})"
                 )
-            if inv_data["roles"] == []:
-                # all roles were removed due to the position check
+            if invites_data["roles"] == []:
+                # all roles were removed due to the checks
                 del bot_invites[invite]
                 await self.data.guild(guild).invites.set(bot_invites)
                 log.warning(
