@@ -3,8 +3,27 @@
    You can adapt this file completely to your liking, but it should at least
    contain the root `toctree` directive.
 
-Welcome to Laggron's Dumb Cogs's documentation!
-===============================================
+Welcome to Laggron's Dumb Cogs's official documentation!
+========================================================
+
+.. HTML head data
+
+.. title:: Laggron's Dumb Cogs documentation
+
+.. meta::
+   :name: description
+   :content: Official documentation for Laggron's Dumb Cogs
+
+.. meta::
+   :property: og:title
+   :content: Laggron's Dumb Cogs's documentation
+
+.. meta::
+   :property: og:description
+   :content: Official documentation for Laggron's Dumb Cogs
+
+
+.. Badges and artwork
 
 .. image:: https://discordapp.com/api/guilds/363008468602454017/embed.png
     :target: https://discord.gg/AVzjfpRM
@@ -22,7 +41,7 @@ Welcome to Laggron's Dumb Cogs's documentation!
     :target: http://laggrons-dumb-cogs.readthedocs.io
     :alt: Docs build
 
-.. image:: https://img.shields.io/badge/PRs-welcome-brightgreen.svg?style=flat-square
+.. image:: https://img.shields.io/badge/PRs-welcome-brightgreen.svg
     :target: http://makeapullrequest.com
     :alt: PRs open
 
@@ -45,6 +64,7 @@ Welcome to Laggron's Dumb Cogs's documentation!
     :caption: API Reference
 
     roleinvite-api
+    warnsystem-api
 
 Indices and tables
 ==================

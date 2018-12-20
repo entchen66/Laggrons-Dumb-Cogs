@@ -7,13 +7,15 @@ import inspect  # for checking is value is a class
 import traceback
 import random
 
-from discord.ext import commands
+from redbot.core import commands
 from redbot.core import checks
 from redbot.core import Config
 from redbot.core.utils.chat_formatting import pagify
 
+BaseCog = getattr(commands, "Cog", object)
 
-class InstantCommands:
+
+class InstantCommands(BaseCog):
     """
     Generate a new command from a code snippet, without making a new cog.
 
@@ -176,7 +178,9 @@ class InstantCommands:
                 message = (
                     "An expetion has occured while adding the command to discord.py:\n"
                     "```py\n"
-                    "{}```".format("".join(traceback.format_exception(type(e), e, e.__traceback__)))
+                    "{}```".format(
+                        "".join(traceback.format_exception(type(e), e, e.__traceback__))
+                    )
                 )
                 for page in pagify(message):
                     await ctx.send(page)
@@ -201,7 +205,9 @@ class InstantCommands:
                 message = (
                     "An expetion has occured while adding the listener to discord.py:\n"
                     "```py\n"
-                    "{}```".format("".join(traceback.format_exception(type(e), e, e.__traceback__)))
+                    "{}```".format(
+                        "".join(traceback.format_exception(type(e), e, e.__traceback__))
+                    )
                 )
                 for page in pagify(message):
                     await ctx.send(page)

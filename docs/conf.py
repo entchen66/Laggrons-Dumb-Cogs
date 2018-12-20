@@ -38,7 +38,6 @@ extensions = [
     "sphinx.ext.viewcode",
     "sphinx.ext.napoleon",
     "sphinxcontrib.asyncio",
-    "sphinx_autodoc_napoleon_typehints",
 ]
 
 # Add any paths that contain templates here, relative to this directory.
@@ -113,7 +112,10 @@ html_static_path = [".static"]
 # This is required for the alabaster theme
 # refs: http://alabaster.readthedocs.io/en/latest/installation.html#sidebars
 html_sidebars = {
-    "**": ["relations.html", "searchbox.html"]  # needs 'show_related': True theme option to display
+    "**": [
+        "relations.html",
+        "searchbox.html",
+    ]  # needs 'show_related': True theme option to display
 }
 
 
@@ -185,3 +187,6 @@ intersphinx_mapping = {
     "discord": ("https://discordpy.readthedocs.io/en/rewrite/", None),
     "redbot": ("https://red-discordbot.readthedocs.io/en/v3-develop/", None),
 }
+
+# Napoleon setting
+napoleon_numpy_docstrings = True

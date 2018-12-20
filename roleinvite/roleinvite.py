@@ -41,6 +41,7 @@ class RoleInvite(commands.Cog):
 
         self.data = Config.get_conf(self, 260)
         def_guild = {"invites": {}, "enabled": False}
+        self.data.register_global(**def_global)
         self.data.register_guild(**def_guild)
 
         self.api = API(self.bot, self.data, log)  # loading the API

@@ -1,7 +1,6 @@
 # Say by retke, aka El Laggron
 
 import discord
-import datetime
 import os
 import asyncio
 import sys
@@ -11,7 +10,7 @@ from redbot.core import checks
 from redbot.core import Config
 from redbot.core.i18n import Translator, cog_i18n
 from redbot.core.data_manager import cog_data_path
-from discord.ext import commands
+from redbot.core import commands
 
 from .sentry import Sentry
 
@@ -23,26 +22,29 @@ else:
     log.setLevel(logging.WARNING)
 _ = Translator("Say", __file__)
 
+BaseCog = getattr(commands, "Cog", object)
+
 
 @cog_i18n(_)
-class Say:
+class Say(BaseCog):
     """
     Speak as if you were the bot
-    
+
     Report a bug or ask a question: https://discord.gg/AVzjfpR
     Full documentation and FAQ: http://laggrons-dumb-cogs.readthedocs.io/say.html
     """
 
     def __init__(self, bot):
         self.bot = bot
-        self.sentry = Sentry(log, self.__version__)
-        if bot.loop.create_task(bot.db.enable_sentry()):
-            self.sentry.enable()
+        self.data = Config.get_conf(self, 260)
+        self.data.register_global(enable_sentry=None)
+        self.translator = _
+        self.sentry = Sentry(log, self.__version__, bot)
         self.interaction = []
         self.cache = cog_data_path(self) / "cache"
 
     __author__ = "retke (El Laggron)"
-    __version__ = "1.4.4"
+    __version__ = "1.4.6"
     __info__ = {
         "bot_version": "3.0.0b14",
         "description": (
@@ -61,6 +63,18 @@ class Say:
         "short": "Speak as the bot through multiple options.",
         "tags": ["rift", "upload", "interact"],
     }
+
+    def _set_context(self, data: dict):
+        """
+        Set any extra context information before logging something.
+        This is an alias of ``self.sentry.client.extra_context()``
+
+        Arguments
+        ---------
+        data: dict
+            The dictionnary that must appear on Sentry panel
+        """
+        self.sentry.client.extra_context(data)
 
     async def download_files(self, message: discord.Message, author: discord.User = None):
         """
@@ -165,13 +179,28 @@ class Say:
             await channel.send(text, files=files)
         except discord.errors.Forbidden as e:
             if not ctx.guild.me.permissions_in(channel).send_messages:
-                await ctx.send(
-                    _("I am not allowed to send messages in ") + channel.mention, delete_after=1
-                )
+                author = ctx.author
+                try:
+                    await ctx.send(
+                        _("I am not allowed to send messages in ") + channel.mention,
+                        delete_after=2,
+                    )
+                except discord.errors.Forbidden as e:
+                    await author.send(
+                        _("I am not allowed to send messages in ") + channel.mention,
+                        delete_after=15,
+                    )
+                    # If this fails then fuck the command author
             elif not ctx.guild.me.permissions_in(channel).attach_files:
-                await ctx.send(
-                    _("I am not allowed to upload files in ") + channel.mention, delete_after=1
-                )
+                try:
+                    await ctx.send(
+                        _("I am not allowed to upload files in ") + channel.mention, delete_after=2
+                    )
+                except discord.errors.Forbidden as e:
+                    await author.send(
+                        _("I am not allowed to upload files in ") + channel.mention,
+                        delete_after=15,
+                    )
             else:
                 log.error(
                     f"Unknown permissions error when sending a message.\n{error_message}",
@@ -206,12 +235,16 @@ class Say:
         """
 
         # download the files BEFORE deleting the message
-        files = await self.download_files(ctx.message, ctx.author)
+        author = ctx.author
+        files = await self.download_files(ctx.message, author)
 
         try:
             await ctx.message.delete()
         except discord.errors.Forbidden:
-            await ctx.send(_("Not enough permissions to delete message"), delete_after=1)
+            try:
+                await ctx.send(_("Not enough permissions to delete messages."), delete_after=2)
+            except discord.errors.Forbidden as e:
+                await author.send(_("Not enough permissions to delete messages."), delete_after=15)
 
         await self.say(ctx, text, files)
 
@@ -295,21 +328,56 @@ class Say:
 
     @commands.command(hidden=True)
     @checks.is_owner()
-    async def sayinfo(self, ctx):
+    async def sayinfo(self, ctx, sentry: str = None):
         """
         Get informations about the cog.
-        """
 
-        sentry = _("enabled") if await self.bot.db.enable_sentry() else _("disabled")
+        Type `sentry` after your command to modify its status.
+        """
+        current_status = await self.data.enable_sentry()
+        status = lambda x: _("enable") if x else _("disable")
+
+        if sentry is not None and "sentry" in sentry:
+
+            def check(message):
+                return message.author == ctx.author and message.channel == ctx.author.dm_channel
+
+            await ctx.send(
+                _(
+                    "You're about to {} error logging. Are you sure you want to do this? Type `yes` to confirm."
+                ).format(not current_status)
+            )
+            try:
+                response = await self.bot.wait_for("message", timeout=60, check=check)
+            except asyncio.TimeoutError:
+                await ctx.send(_("Request timed out."))
+            else:
+                if "yes" in response.content.lower():
+                    await self.data.enable_sentry.set(not current_status)
+                    if not current_status:
+                        # now enabled
+                        await ctx.send(
+                            _(
+                                "Upcoming errors will be reported automatically for a faster fix. "
+                                "Thank you for helping me with the development process!"
+                            )
+                        )
+                        await self.sentry.enable()
+                    else:
+                        # disabled
+                        await ctx.send(_("Error logging has been disabled."))
+                        await self.sentry.disable()
+                    return
+
         message = _(
             "Laggron's Dumb Cogs V3 - say\n\n"
             "Version: {0.__version__}\n"
             "Author: {0.__author__}\n"
-            "Sentry error reporting: {1}\n\n"
+            "Sentry error reporting: {1}d (type `{2}sayinfo sentry` to change this)\n\n"
             "Github repository: https://github.com/retke/Laggrons-Dumb-Cogs/tree/v3\n"
             "Discord server: https://discord.gg/AVzjfpR\n"
             "Documentation: http://laggrons-dumb-cogs.readthedocs.io/"
-        ).format(self, sentry)
+        ).format(self, status(current_status), ctx.prefix)
         await ctx.send(message)
 
     async def on_reaction_add(self, reaction, user):
@@ -331,15 +399,27 @@ class Say:
         messages = "\n".join(
             [
                 f"{x.author} %bot%: {x.content}".replace("%bot%", "(Bot)" if x.author.bot else "")
-                for x in await ctx.history(limit=5).flatten()
+                for x in await ctx.history(limit=5, reverse=True).flatten()
             ]
         )
+        log.propagate = False  # let's remove console output for this since Red already handle this
+        context = {
+            "command": {
+                "invoked": f"{ctx.author} (ID: {ctx.author.id})",
+                "command": f"{ctx.command.name} (cog: {ctx.cog})",
+            }
+        }
+        if ctx.guild:
+            context["guild"] = f"{ctx.guild.name} (ID: {ctx.guild.id})"
+        self._set_context(context)
         log.error(
             f"Exception in command '{ctx.command.qualified_name}'.\n\n"
             f"Myself: {ctx.me}\n"
-            f"Last 5 messages:\n\n{messages}",
+            f"Last 5 messages:\n\n{messages}\n\n",
             exc_info=error.original,
         )
+        log.propagate = True  # re-enable console output for warnings
+        self._set_context({})  # remove context for future logs
 
     async def stop_interaction(self, user):
         self.interaction.remove(user)
