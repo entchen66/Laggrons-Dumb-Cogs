@@ -1,6 +1,15 @@
 import discord
-from discord.utils import get
-from .errors import Errors
+import logging
+
+from .roleinvite import _  # translator
+from . import errors
+
+log = logging.getLogger("laggron.warnsystem")
+if logging.getLogger("red").isEnabledFor(logging.DEBUG):
+    # debug mode enabled
+    log.setLevel(logging.DEBUG)
+else:
+    log.setLevel(logging.WARNING)
 
 
 class API:
@@ -24,10 +33,9 @@ class API:
             version = bot.get_cog('RoleInvite').__version__
     """
 
-    def __init__(self, bot, config, log):
+    def __init__(self, bot, config):
         self.bot = bot
         self.data = config
-        self.log = log
 
     async def update_invites(self) -> dict:
         """
@@ -66,7 +74,7 @@ class API:
 
             for invite in bot_invites[guild.id]["invites"]:
                 if all(invite != x for x in ["main", "default"]):
-                    invite_object = get(invites, url=invite)
+                    invite_object = discord.utils.get(invites, url=invite)
                     if not invite_object:
                         del bot_invites[invite]
                     else:
@@ -96,23 +104,23 @@ class API:
 
         Raises
         ------
-        :class:`~Errors.NotInvite`
+        :class:`~errors.NotInvite`
             The invite given is not a discord invite, not is is main/default.
-        :class:`~Errors.CannotGetInvites`
+        :class:`~errors.CannotGetInvites`
             The bot doesn't have the permission to get the guild's invites
-        :class:`~Errors.EmptyRolesList`
+        :class:`~errors.EmptyRolesList`
             The list of roles given is empty
-        :class:`~Errors.InviteNotFound`
+        :class:`~errors.InviteNotFound`
             The invite given doesn't exist in the guild.
         """
         invites = await self.data.guild(guild).invites()
         if roles == []:
-            raise Errors.EmptyRolesList("No roles to add to the invite")
+            raise errors.EmptyRolesList("No roles to add to the invite")
 
         try:
             guild_invite = await guild.invites()
         except discord.errors.Forbidden:
-            raise Errors.CannotGetInvites(
+            raise errors.CannotGetInvites(
                 'The "Manage server" permission is needed for this function'
             )
 
@@ -120,11 +128,11 @@ class API:
             try:
                 invite_object = await self.bot.get_invite(invite)
             except discord.errors.NotFound:
-                raise Errors.NotInvite(f"Cannot get discord.Invite object from {invite}")
+                raise errors.NotInvite(f"Cannot get discord.Invite object from {invite}")
 
             invite_object = discord.utils.get(guild_invite, code=invite_object.code)
             if not invite_object:
-                raise Errors.InviteNotFound("The invite given doesn't exist in that guild")
+                raise errors.InviteNotFound("The invite given doesn't exist in that guild")
 
         if invite not in invites:
             await self.data.guild(guild).invites.set_raw(invite, value={"roles": [], "uses": None})

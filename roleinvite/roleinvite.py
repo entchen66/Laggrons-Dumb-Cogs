@@ -1,29 +1,30 @@
 # RoleInvite by retke, aka El Laggron
-
 import asyncio
 import logging
 import discord
 
-from discord.utils import get
+from typing import TYPE_CHECKING
+
 from redbot.core import commands
 from redbot.core import Config
 from redbot.core import checks
 from redbot.core.i18n import cog_i18n, Translator
 
-from .api import API
-from .sentry import Sentry
+# creating this before importing other modules allows to import the translator
+_ = Translator("WarnSystem", __file__)
 
-log = logging.getLogger("laggron.roleinvite")
-if logging.getLogger("red").isEnabledFor(logging.DEBUG):
-    # debug mode enabled
-    log.setLevel(logging.DEBUG)
-else:
-    log.setLevel(logging.INFO)
-_ = Translator("RoleInvite", __file__)
+from .api import API
+from . import errors
+
+if TYPE_CHECKING:
+    from .loggers import Log
+
+log = None
+BaseCog = getattr(commands, "Cog", object)
 
 
 @cog_i18n(_)
-class RoleInvite(commands.Cog):
+class RoleInvite(BaseCog):
     """
     Server autorole following the invite the user used to join the server
 
@@ -31,20 +32,19 @@ class RoleInvite(commands.Cog):
     Full documentation and FAQ: https://laggrons-dumb-cogs.readthedocs.io/roleinvite.html
     """
 
+    def_guild = {"invites": {}, "enabled": False}
+
     def __init__(self, bot):
         self.bot = bot
 
-        # logging
-        self.sentry = Sentry(log, self.__version__, bot)
-        if bot.loop.create_task(bot.db.enable_sentry()):
-            self.sentry.enable()
-
         self.data = Config.get_conf(self, 260)
-        def_guild = {"invites": {}, "enabled": False}
-        self.data.register_global(**def_global)
-        self.data.register_guild(**def_guild)
+        self.data.register_guild(**self.def_guild)
 
-        self.api = API(self.bot, self.data, log)  # loading the API
+        self.api = API(bot, self.data)
+        self.errors = errors
+        self.sentry = None
+        self.translator = _
+
         bot.loop.create_task(self.api.update_invites())
 
     __author__ = "retke (El Laggron)"
@@ -71,17 +71,11 @@ class RoleInvite(commands.Cog):
         "tags": ["autorole", "role", "join", "invite"],
     }
 
-    def _set_context(self, data: dict):
-        """
-        Set any extra context information before logging something.
-        This is an alias of ``self.sentry.client.extra_context()``
-
-        Arguments
-        ---------
-        data: dict
-            The dictionnary that must appear on Sentry panel
-        """
-        self.sentry.client.extra_context(data)
+    def _set_log(self, sentry: "Log"):
+        self.sentry = sentry
+        global log
+        log = logging.getLogger("laggron.warnsystem")
+        # this is called now so the logger is already initialized
 
     async def _invite_not_found(self, ctx):
         """
@@ -156,7 +150,7 @@ class RoleInvite(commands.Cog):
                 for x in bot_invites[invite]["roles"]:
                     # iterating current roles so they can be showed to the user
 
-                    bot_role = get(ctx.guild.roles, id=x)
+                    bot_role = discord.utils.get(ctx.guild.roles, id=x)
                     if bot_role is None:
                         # the role doesn't exist anymore
                         bot_invites[invite]["roles"].remove(x)
@@ -271,7 +265,7 @@ class RoleInvite(commands.Cog):
 
         if role is None or len(bot_invite["roles"]) <= 1:
             # user will unlink the invite from the autorole system
-            roles = [get(ctx.guild.roles, id=x) for x in bot_invite["roles"]]
+            roles = [discord.utils.get(ctx.guild.roles, id=x) for x in bot_invite["roles"]]
 
             if invite == "main":
                 message = _("You're about to remove all roles linked to the main autorole.\n")
@@ -345,7 +339,7 @@ class RoleInvite(commands.Cog):
 
             roles = []
             for role in invites[i]["roles"]:
-                roles.append(get(ctx.guild.roles, id=role))
+                roles.append(discord.utils.get(ctx.guild.roles, id=role))
 
             embed = discord.Embed()
             embed.colour = ctx.guild.me.color
@@ -478,7 +472,7 @@ class RoleInvite(commands.Cog):
             roles = []  # roles object to add to the member
             to_remove = []  # lost roles
             for role_id in roles_data:
-                role = get(guild.roles, id=role_id)
+                role = discord.utils.get(guild.roles, id=role_id)
                 if role is None:
                     to_remove.append(role_id)
                 else:
@@ -561,7 +555,7 @@ class RoleInvite(commands.Cog):
             if any(invite == x for x in ["default", "main"]):
                 continue
 
-            invite = get(guild_invites, url=invite)
+            invite = discord.utils.get(guild_invites, url=invite)
             if not invite:
                 del bot_invites[invite.url]
             else:
@@ -580,6 +574,10 @@ class RoleInvite(commands.Cog):
         if not await add_roles("main"):
             return
 
+    # error handling
+    def _set_context(self, data):
+        self.sentry.client.extra_context(data)
+
     async def on_command_error(self, ctx, error):
         if not isinstance(error, commands.CommandInvokeError):
             return
@@ -593,16 +591,16 @@ class RoleInvite(commands.Cog):
             ]
         )
         log.propagate = False  # let's remove console output for this since Red already handle this
-        self._set_context(
-            {
-                "config": await self.data.guild(ctx.guild).all(),
-                "guild": f"{ctx.guild.name} (ID: {ctx.guild.id})",
-                "command": {
-                    "invoked": f"{ctx.author} (ID: {ctx.author.id})",
-                    "command": f"{ctx.command.name} (cog: {ctx.cog})",
-                },
+        context = {
+            "command": {
+                "invoked": f"{ctx.author} (ID: {ctx.author.id})",
+                "command": f"{ctx.command.name} (cog: {ctx.cog})",
+                "arguments": ctx.kwargs,
             }
-        )
+        }
+        if ctx.guild:
+            context["guild"] = f"{ctx.guild.name} (ID: {ctx.guild.id})"
+        self._set_context(context)
         log.error(
             f"Exception in command '{ctx.command.qualified_name}'.\n\n"
             f"Myself: {ctx.me}\n"
