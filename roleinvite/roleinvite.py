@@ -9,6 +9,7 @@ from redbot.core import commands
 from redbot.core import Config
 from redbot.core import checks
 from redbot.core.i18n import cog_i18n, Translator
+from redbot.core.utils.predicates import MessagePredicate
 
 # creating this before importing other modules allows to import the translator
 _ = Translator("WarnSystem", __file__)
@@ -85,37 +86,15 @@ class RoleInvite(BaseCog):
 
     async def _check(self, ctx: commands.Context):
         """
-        Wait for user input, can be ``yes`` or ``no`` (can be translated).
-
-        Arguments
-        ---------
-        ctx: ~redbot.core.commands.Context
-            The context of the command.
-
-        Returns
-        -------
-        bool
-            :py:obj:`True` if the answer is ``yes``, else :py:obj:`False`.
+        Wait for user confirm.
         """
-
-        def confirm(message):
-            return (
-                message.author == ctx.author
-                and message.channel == ctx.channel
-                and message.content.lower() in [_("yes"), _("no")]
-            )
-
+        pred = MessagePredicate.yes_or_no(ctx)
         try:
-            response = await self.bot.wait_for("message", timeout=120, check=confirm)
+            await self.bot.wait_for("message", check=pred)
         except asyncio.TimeoutError:
             await ctx.send(_("Request timed out."))
             return False
-
-        if response.content.lower() == _("no"):
-            await ctx.channel.send(_("Aborting..."))
-            return False
-        else:
-            return True
+        return pred.result
 
     @commands.group()
     @checks.admin()
@@ -162,8 +141,9 @@ class RoleInvite(BaseCog):
 
                     else:
                         current_roles.append(bot_role.name)
+                await self.data.guild(ctx.guild).invites.set(bot_invites)
 
-                if current_roles == []:
+                if not current_roles:
                     return True
 
                 await ctx.send(
@@ -176,7 +156,6 @@ class RoleInvite(BaseCog):
                     ).format("`, `".join(current_roles), ctx.prefix, len(current_roles) + 1)
                 )
 
-                await self.data.guild(ctx.guild).invites.set(bot_invites)
                 if not await self._check(ctx):  # the user answered no
                     return False
             return True
@@ -188,7 +167,7 @@ class RoleInvite(BaseCog):
             await ctx.send(_("I need the `Manage server` permission!"))
             return
         if not ctx.guild.me.guild_permissions.manage_roles:
-            await ctx.send(_("I need the `Add roles` permission!"))
+            await ctx.send(_("I need the `Manage roles` permission!"))
 
         guild_invites = await ctx.guild.invites()
         try:
