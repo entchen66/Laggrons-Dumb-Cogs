@@ -613,7 +613,7 @@ class API:
                     exc_info=e,
                 )
         await self.data.guild(guild).mute_role.set(role.id)
-        return errors if errors else True
+        return errors
 
     async def format_reason(self, guild: discord.Guild, reason: str = None) -> str:
         """

@@ -413,9 +413,9 @@ class WarnSystem(BaseCog):
                     _("I can't manage roles, please give me this permission to continue.")
                 )
                 return
-            role = await self.api.maybe_create_mute_role(guild)
+            fails = await self.api.maybe_create_mute_role(guild)
             my_position = guild.me.top_role.position
-            if not role:
+            if fails is False:
                 await ctx.send(
                     _(
                         "A mute role was already created! You can change it by specifying "
@@ -424,10 +424,10 @@ class WarnSystem(BaseCog):
                 )
                 return
             else:
-                if isinstance(role, list):
+                if fails:
                     errors = _(
                         "\n\nSome errors occured when editing the channel permissions:\n"
-                    ) + "\n".join(role)
+                    ) + "\n".join(fails)
                 else:
                     errors = ""
                 await ctx.send(
