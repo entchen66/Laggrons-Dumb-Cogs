@@ -343,7 +343,7 @@ class WarnSystem(BaseCog):
         try:
             await ctx.send(embed=embed)
         except discord.errors.HTTPException as e:
-            log.error(f"Couldn't make embed for displaying settings.", exc_info=e)
+            log.error("Couldn't make embed for displaying settings.", exc_info=e)
             await ctx.send(
                 _(
                     "Error when sending the message. Check the warnsystem "
