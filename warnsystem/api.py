@@ -421,17 +421,8 @@ class API:
         tuple
             A :py:class:`tuple` with the modlog embed at index 0, and the user embed at index 1.
         """
-        # TODO comparing values to translated results not safe
-        action = (
-            _("mute")
-            if level == 2
-            else _("kick")
-            if level == 3
-            else _("softban")
-            if level == 4
-            else _("ban")
-            if level == 5
-            else _("warn")
+        action = {1: _("warn"), 2: _("mute"), 3: _("kick"), 4: _("softban"), 5: _("ban")}.get(
+            level, default=_("unknown")
         )
         mod_message = ""
         if not reason:
@@ -840,16 +831,8 @@ class API:
         # take actions
         if take_action:
             # TODO comparing values to translated results not safe
-            action = (
-                _("mute")
-                if level == 2
-                else _("kick")
-                if level == 3
-                else _("softban")
-                if level == 4
-                else _("ban")
-                if level == 5
-                else _("warn")
+            action = {1: _("warn"), 2: _("mute"), 3: _("kick"), 4: _("softban"), 5: _("ban")}.get(
+                level, default=_("unknown")
             )
             if reason and not reason.endswith("."):
                 reason += "."
