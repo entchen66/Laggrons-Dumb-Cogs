@@ -1304,7 +1304,7 @@ class WarnSystem(BaseCog):
             )
         messages = "\n".join(
             [
-                f"{x.author} %bot%: {x.content}".replace("%bot%", "(Bot)" if x.author.bot else "")
+                f"{x.author} {'(Bot)' if x.author.bot else ''}: {x.content}"
                 for x in await ctx.history(limit=5, reverse=True).flatten()
             ]
         )
