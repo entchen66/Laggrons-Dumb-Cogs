@@ -46,6 +46,7 @@ class RedBadArgument(Exception):
     pass
 
 
+# also from Cog-Creators/Red-DiscordBot#2140
 def timedelta_converter(argument: str) -> timedelta:
     """
     Attempts to parse a user input string as a timedelta
