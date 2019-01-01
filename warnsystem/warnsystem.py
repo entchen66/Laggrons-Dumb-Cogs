@@ -794,16 +794,12 @@ class WarnSystem(BaseCog):
             for member, logs in data.items():
                 cases = []
                 for case in [y for x, y in logs.items() if x.startswith("case")]:
-                    # TODO change this extended chaining of ternary statements to a lookup?
-                    level = (
-                        1
-                        if case["level"] == "Simple"
-                        else 3
-                        if case["level"] == "Kick"
-                        else 4
-                        if case["level"] == "Softban"
-                        else 5
-                    )
+                    level = {
+                        "Simple": 1,
+                        "Kick": 3,
+                        "Softban": 4,
+                        "Ban": 5,
+                    }.get(case["level"], default=1)
                     cases.append(
                         {
                             "level": level,
