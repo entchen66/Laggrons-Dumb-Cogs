@@ -43,6 +43,7 @@ class API:
         self.data = config
 
         # importing this here prevents a RuntimeError when building the documentation
+        # TODO find another solution
         global get_red_modlog_channel
         from redbot.core.modlog import get_modlog_channel as get_red_modlog_channel
 
@@ -52,6 +53,7 @@ class API:
     def _format_timedelta(self, time: timedelta):
         """Format a timedelta object into a string"""
         # blame python for not creating a strftime attribute
+        # TODO get another solution for plural
         plural = lambda x: _("s") if x > 1 else ""
         strings = []
         units = {
@@ -63,6 +65,7 @@ class API:
             _("minute"): 0,
             _("second"): time.total_seconds(),
         }
+        # TODO performance hit, no need of conditional divmod or using translated dict keys
         if units[_("second")] >= 31536000:
             units[_("year")], units[_("second")] = divmod(units[_("second")], 365)
         if units[_("second")] >= 2635200:
@@ -418,6 +421,7 @@ class API:
         tuple
             A :py:class:`tuple` with the modlog embed at index 0, and the user embed at index 1.
         """
+        # TODO comparing values to translated results not safe
         action = (
             _("mute")
             if level == 2
@@ -443,6 +447,7 @@ class API:
 
         # a lambda that returns a string; if True is given, a third person sentence is returned
         # (modlog), if False is given, a first person sentence is returned (DM user)
+        # TODO get another solution for plural
         current_status = lambda x: _(
             "{who} now {verb} {total} warning{plural} ({total_type} {action}{plural_type})"
         ).format(
@@ -834,6 +839,7 @@ class API:
 
         # take actions
         if take_action:
+            # TODO comparing values to translated results not safe
             action = (
                 _("mute")
                 if level == 2

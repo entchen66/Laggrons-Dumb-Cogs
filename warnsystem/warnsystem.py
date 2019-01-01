@@ -91,6 +91,7 @@ class WarnSystem(BaseCog):
         "show_mod": False,  # if the responsible mod should be revealed to the warned user
         "mute_role": None,  # the role used for mute
         "respect_hierarchy": False,  # if the bot should check if the mod is allowed by hierarchy
+        # TODO use bot settingfor respect_hierarchy ?
         "reinvite": True,  # if the bot should try to send an invite to an unbanned/kicked member
         "channels": {  # modlog channels
             "main": None,  # default
@@ -793,6 +794,7 @@ class WarnSystem(BaseCog):
             for member, logs in data.items():
                 cases = []
                 for case in [y for x, y in logs.items() if x.startswith("case")]:
+                    # TODO change this extended chaining of ternary statements to a lookup?
                     level = (
                         1
                         if case["level"] == "Simple"
