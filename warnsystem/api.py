@@ -53,34 +53,32 @@ class API:
     def _format_timedelta(self, time: timedelta):
         """Format a timedelta object into a string"""
         # blame python for not creating a strftime attribute
-        # TODO get another solution for plural
-        plural = lambda x: _("s") if x > 1 else ""
+        plural = lambda name, amount: name[0] if amount > 1 else name[1]
         strings = []
-        units = {
-            _("year"): 0,
-            _("month"): 0,
-            _("week"): 0,
-            _("day"): 0,
-            _("hour"): 0,
-            _("minute"): 0,
-            _("second"): time.total_seconds(),
-        }
-        # TODO performance hit, no need of conditional divmod or using translated dict keys
-        if units[_("second")] >= 31536000:
-            units[_("year")], units[_("second")] = divmod(units[_("second")], 365)
-        if units[_("second")] >= 2635200:
-            units[_("month")], units[_("second")] = divmod(units[_("second")], 2635200)
-        if units[_("second")] >= 86400:
-            units[_("week")], units[_("second")] = divmod(units[_("second")], 86400)
-        if units[_("second")] >= 3600:
-            units[_("hour")], units[_("second")] = divmod(units[_("second")], 3600)
-        if units[_("second")] >= 60:
-            units[_("minute")], units[_("second")] = divmod(units[_("second")], 60)
 
-        for unit, value in units.items():
+        seconds = time.total_seconds()
+        years, seconds = divmod(seconds, 31622400)
+        months, seconds = divmod(seconds, 2635200)
+        weeks, seconds = divmod(seconds, 86400)
+        hours, seconds = divmod(seconds, 3600)
+        minutes, seconds = divmod(seconds, 60)
+        units = [years, months, weeks, hours, minutes, seconds]
+
+        for i, value in enumerate(units):
             if value < 1:
                 continue
-            strings.append(f"{round(value)} {unit}{plural(value)}")
+            # tuples inspired from mikeshardmind
+            # https://github.com/mikeshardmind/SinbadCogs/blob/v3/scheduler/time_utils.py#L29
+            units_name = {
+                0: (_("year"), _("years")),
+                1: (_("month"), _("months")),
+                2: (_("week"), _("weeks")),
+                3: (_("hour"), _("hours")),
+                4: (_("minute"), _("minute")),
+                5: (_("second"), _("second")),
+            }
+            unit_name = plural(units_name.get(i), len(value))
+            strings.append(f"{round(value)} {unit_name}")
         string = ", ".join(strings[:-1])
         if len(strings) > 1:
             string += _(" and ") + strings[-1]
