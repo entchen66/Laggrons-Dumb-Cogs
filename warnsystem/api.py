@@ -906,9 +906,8 @@ class API:
                 channel = sorted(
                     [
                         x
-                        for x in guild.channels
-                        if isinstance(x, discord.TextChannel)
-                        and x.permissions_for(guild.me).create_instant_invite
+                        for x in guild.text_channels
+                        if x.permissions_for(guild.me).create_instant_invite
                     ],
                     key=lambda x: (x.position, len(x.members)),
                 )[0]
