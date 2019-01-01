@@ -223,7 +223,7 @@ class WarnSystem(BaseCog):
                 )
             )
         except errors.NotAllowedByHierarchy:
-            is_admin = mod.is_admin_or_superior(member)
+            is_admin = mod.is_admin_or_superior(self.bot, member)
             await ctx.send(
                 _(
                     "You are not allowed to do this, {member} is higher than you in the role "
