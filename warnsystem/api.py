@@ -419,9 +419,13 @@ class API:
         tuple
             A :py:class:`tuple` with the modlog embed at index 0, and the user embed at index 1.
         """
-        action = {1: _("warn"), 2: _("mute"), 3: _("kick"), 4: _("softban"), 5: _("ban")}.get(
-            level, default=_("unknown")
-        )
+        action = {
+            1: (_("warn"), _("warns")),
+            2: (_("mute"), _("mutes")),
+            3: (_("kick"), _("kicks")),
+            4: (_("softban"), _("softbans")),
+            5: (_("ban"), _("bans")),
+        }.get(level, default=(_("unknown")))
         mod_message = ""
         if not reason:
             reason = _("No reason was provided.")
@@ -436,17 +440,15 @@ class API:
 
         # a lambda that returns a string; if True is given, a third person sentence is returned
         # (modlog), if False is given, a first person sentence is returned (DM user)
-        # TODO get another solution for plural
         current_status = lambda x: _(
-            "{who} now {verb} {total} warning{plural} ({total_type} {action}{plural_type})"
+            "{who} now {verb} {total} {warning} ({total_type} {action}{plural_type})"
         ).format(
             who=_("The member") if x else _("You"),
             verb=_("has") if x else _("have"),
             total=total_warns,
+            warning=_("warnings") if total_warns > 1 else _("warning"),
             total_type=total_type_warns,
-            action=action,
-            plural="s" if total_warns > 1 else "",
-            plural_type="s" if total_type_warns > 1 else "",
+            action=action[1] if total_type_warns > 1 else action[0],
         )
 
         # we set any value that can be used multiple times
@@ -475,7 +477,9 @@ class API:
         # embed for the modlog
         log_embed = discord.Embed()
         log_embed.set_author(name=f"{member.name} | {member.id}", icon_url=member.avatar_url)
-        log_embed.title = _("Level {level} warning ({action})").format(level=level, action=action)
+        log_embed.title = _("Level {level} warning ({action})").format(
+            level=level, action=action[0]
+        )
         log_embed.description = format_description(log_description)
         log_embed.add_field(name=_("Member"), value=member.mention, inline=True)
         log_embed.add_field(name=_("Moderator"), value=author.mention, inline=True)
@@ -828,7 +832,6 @@ class API:
 
         # take actions
         if take_action:
-            # TODO comparing values to translated results not safe
             action = {1: _("warn"), 2: _("mute"), 3: _("kick"), 4: _("softban"), 5: _("ban")}.get(
                 level, default=_("unknown")
             )
