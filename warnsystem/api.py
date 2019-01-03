@@ -1,10 +1,17 @@
 import asyncio
 import discord
 import logging
+import os
+import sys
 
 from copy import deepcopy
 from typing import Union, Optional
 from datetime import datetime, timedelta
+
+try:
+    from redbot.core.modlog import get_modlog_channel as get_red_modlog_channel
+except RuntimeError:
+    pass  # running sphinx-build raises an error when importing this module
 
 from .warnsystem import _  # translator
 from . import errors
@@ -44,8 +51,6 @@ class API:
 
         # importing this here prevents a RuntimeError when building the documentation
         # TODO find another solution
-        global get_red_modlog_channel
-        from redbot.core.modlog import get_modlog_channel as get_red_modlog_channel
 
     def _get_datetime(self, time: str) -> datetime:
         return datetime.strptime(time, "%a %d %B %Y %H:%M")
