@@ -56,6 +56,7 @@ async def setup(bot):
     n = RoleInvite(bot)
     _ = n.translator
     sentry = Log(bot, n.__version__)
+    sentry.enable_stdout()
     n._set_log(sentry)
     if await n.data.enable_sentry() is None:
         response = await ask_enable_sentry(bot)
