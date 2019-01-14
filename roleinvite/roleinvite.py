@@ -401,16 +401,6 @@ class RoleInvite(BaseCog):
                     "The autorole system is now enabled on this server.\n"
                     "Type `{0.prefix}roleset list` to see what's the current role list.\n"
                     "If the bot lose the `Manage roles` or the `Manage server` permissions "
-                    ", the autorole will be disabled."
-                ).format(ctx)
-            )
-        else:
-            await ctx.send(
-                _(
-                    "The autorole system is now disabled on this server.\n"
-                    "Type `{0.prefix}roleset enable` to enable it back.\n\n"
-                    "The settings are still saved, and you can also edit them. "
-                    "New members will just be ignored."
                 ).format(ctx)
             )
 
