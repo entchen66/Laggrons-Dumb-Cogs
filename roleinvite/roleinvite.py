@@ -553,13 +553,6 @@ class RoleInvite(BaseCog):
         if not ctx.command.cog_name == self.__class__.__name__:
             # That error doesn't belong to the cog
             return
-        messages = "\n".join(
-            [
-                f"{x.author} %bot%: {x.content}".replace("%bot%", "(Bot)" if x.author.bot else "")
-                for x in await ctx.history(limit=5, reverse=True).flatten()
-            ]
-        )
-        log.propagate = False  # let's remove console output for this since Red already handle this
         context = {
             "command": {
                 "invoked": f"{ctx.author} (ID: {ctx.author.id})",
@@ -570,13 +563,11 @@ class RoleInvite(BaseCog):
         if ctx.guild:
             context["guild"] = f"{ctx.guild.name} (ID: {ctx.guild.id})"
         self._set_context(context)
+        self.sentry.disable_stdout()  # remove console output since Red already handle this
         log.error(
-            f"Exception in command '{ctx.command.qualified_name}'.\n\n"
-            f"Myself: {ctx.me}\n"
-            f"Last 5 messages:\n\n{messages}\n\n",
-            exc_info=error.original,
+            f"Exception in command '{ctx.command.qualified_name}'.\n\n", exc_info=error.original
         )
-        log.propagate = True  # re-enable console output for warnings
+        self.sentry.enable_stdout()  # re-enable console output for warnings
         self._set_context({})  # remove context for future logs
 
     def __unload(self):
