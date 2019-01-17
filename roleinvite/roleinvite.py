@@ -79,12 +79,6 @@ class RoleInvite(BaseCog):
         log = logging.getLogger("laggron.warnsystem")
         # this is called now so the logger is already initialized
 
-    async def _invite_not_found(self, ctx):
-        """
-        Send a message when the invite given was not found.
-        """
-        return await ctx.send(_("That invite cannot be found"))
-
     async def _check(self, ctx: commands.Context):
         """
         Wait for user confirm.
@@ -129,27 +123,25 @@ class RoleInvite(BaseCog):
 
                 for x in bot_invites[invite]["roles"]:
                     # iterating current roles so they can be showed to the user
-
                     bot_role = discord.utils.get(ctx.guild.roles, id=x)
                     if bot_role is None:
                         # the role doesn't exist anymore
                         bot_invites[invite]["roles"].remove(x)
-
                     elif x == role.id:
                         # the role that needs to be added is already linked
                         await ctx.send(_("That role is already linked to the invite."))
                         return False
-
                     else:
                         current_roles.append(bot_role.name)
+
                 await self.data.guild(ctx.guild).invites.set(bot_invites)
 
                 if not current_roles:
-                    return True
+                    return True  # all roles deleted
 
                 await ctx.send(
                     _(
-                        "**WARNING**: This invite is already registered and currently linked to "
+                        "**Warning**: This invite is already registered and currently linked to "
                         "the role(s) `{}`.\nIf you continue, this invite will give all roles "
                         "given to the new member. \nIf you want to edit it, first delete the link "
                         "using `{}inviteset remove`.\n\nDo you want to link this invite to {} "
@@ -161,6 +153,7 @@ class RoleInvite(BaseCog):
                     return False
             return True
 
+        # permission checks
         if role.position >= ctx.guild.me.top_role.position:
             await ctx.send(_("That role is higher than mine. I can't add it to new users."))
             return
@@ -169,20 +162,20 @@ class RoleInvite(BaseCog):
             return
         if not ctx.guild.me.guild_permissions.manage_roles:
             await ctx.send(_("I need the `Manage roles` permission!"))
+            return
 
         guild_invites = await ctx.guild.invites()
         try:
             invite = await commands.InviteConverter.convert(self, ctx, invite)
         except (commands.BadArgument, IndexError):
             if not any(invite == x for x in ["main", "default"]):
-                await self._invite_not_found(ctx)
+                await ctx.send(_("That invite cannot be found"))
                 return
-        else:
-            # not the default autorole
+        else:  # not the default autorole, checks if the invite is valid
             if invite.channel.guild != ctx.guild:
                 await ctx.send(_("That invite doesn't belong to this server!"))
                 return
-            if guild_invites == []:
+            if not guild_invites:
                 await ctx.send(_("There are no invites generated on this server."))
                 return
 
@@ -198,7 +191,6 @@ class RoleInvite(BaseCog):
                 ).format(role.name)
             )
             return
-
         elif invite == "default":
             if not await roles_iteration(invite):
                 return
@@ -210,18 +202,20 @@ class RoleInvite(BaseCog):
                 ).format(role.name)
             )
             return
-
+        # invite is not "main" or "default", we try to find the invite
         for guild_invite in guild_invites:
             if invite.url == guild_invite.url:
                 if not await roles_iteration(invite.url):
                     return
                 await self.api.add_invite(ctx.guild, invite.url, [role.id])
                 await ctx.send(
-                    _("The role `{}` is now linked to the invite {}").format(role.name, invite.url)
+                    _("The role `{}` is now linked to the invite {}").format(
+                        role.name, self.api.escape_invite_links(invite.url)
+                    )
                 )
                 return
-
-        await self._invite_not_found(ctx)
+        # not "main", "default" or an invite for the guild
+        await ctx.send(_("That invite cannot be found"))
 
     @inviteset.command()
     async def remove(self, ctx, invite: str, *, role: discord.Role = None):
@@ -234,24 +228,20 @@ class RoleInvite(BaseCog):
         `main`/`default` instead of a discord invite.
         """
         invites = await self.data.guild(ctx.guild).invites()
-        if invite not in invites:
+        invites = {x.split("/")[-1]: y for x, y in invites.items()}  # removes https://discord.gg/
+        invite = invite.split("/")[-1]  # also removes https://discord.gg
+        bot_invite = invites.get(invite)
+        if not bot_invite:
             await ctx.send(_("That invite cannot be found"))
             return
 
-        bot_invite = invites.get(invite)
-        if bot_invite is None:
-            await self._invite_not_found(ctx)
-            return
-
-        if role is None or len(bot_invite["roles"]) <= 1:
-            # user will unlink the invite from the autorole system
+        if not role or len(bot_invite["roles"]) <= 1:
+            # user will remove the invite from the autorole system
             roles = [discord.utils.get(ctx.guild.roles, id=x) for x in bot_invite["roles"]]
             roles = [x for x in roles if x]  # removes deleted roles
             if not roles:  # no more roles after cleaning
                 await self.api.remove_invite(ctx.guild, invite)
-                await ctx.send(
-                    _("That invite lost all of its linked roles and was deleted.")
-                )
+                await ctx.send(_("That invite lost all of its linked roles and was deleted."))
                 return
 
             if invite == "main":
@@ -261,9 +251,9 @@ class RoleInvite(BaseCog):
             else:
                 message = _("You're about to remove all roles linked to this invite.\n")
 
-            message += _(
-                "List of roles:\n```Diff\n+ {}\n```\n\nProceed? (yes/no)\n\n"
-            ).format("\n+ ".join([x.name for x in roles]))
+            message += _("List of roles:\n{}\nProceed? (yes/no)\n\n").format(
+                "```Diff\n+ " + "\n+ ".join([x.name for x in roles]) + "\n```"
+            )
 
             if len(bot_invite["roles"]) > 1:
                 message += _(
@@ -277,7 +267,11 @@ class RoleInvite(BaseCog):
                 return
 
             await self.api.remove_invite(ctx.guild, invite=invite)
-            await ctx.send(_("The invite {} has been removed from the list.").format(invite))
+            await ctx.send(
+                _("The invite {} has been removed from the list.").format(
+                    self.api.escape_invite_links(invite)
+                )
+            )
 
         else:
             # user will remove only one role from the invite link
@@ -286,7 +280,7 @@ class RoleInvite(BaseCog):
             elif invite == "default":
                 message = _("default autorole.")
             else:
-                message = _("invite {}.").format(invite)
+                message = _("invite {}.").format(self.api.escape_invite_links(invite))
             await ctx.send(
                 _("You're about to unlink the `{}` role from the {}\nProceed? (yes/no)").format(
                     role.name, message
@@ -299,7 +293,7 @@ class RoleInvite(BaseCog):
 
             await self.api.remove_invite(ctx.guild, invite, [role.id])
             await ctx.send(
-                _("The role `{}` is now unlinked from the invite {}").format(role.name, invite)
+                _("The role `{}` is now unlinked from the {}").format(role.name, message)
             )
 
     @inviteset.command()
@@ -329,7 +323,7 @@ class RoleInvite(BaseCog):
             if not roles:
                 to_delete.append(i)  # no more roles
                 continue
-            roles_names = "+ \n".join([x.name for x in roles])
+            roles_names = "\n+ ".join([x.name for x in roles])
 
             if i == "default":
                 text += f"{_('Roles linked to the default autorole')}:\n+ {roles_names}\n\n"
@@ -559,3 +553,4 @@ class RoleInvite(BaseCog):
 
     def __unload(self):
         self.sentry.disable()
+        log.handlers = []
