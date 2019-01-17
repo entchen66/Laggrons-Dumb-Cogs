@@ -98,7 +98,7 @@ class RoleInvite(BaseCog):
 
     @commands.group()
     @checks.admin()
-    async def roleset(self, ctx):
+    async def inviteset(self, ctx):
         """
         Roleinvite cog management
 
@@ -107,12 +107,12 @@ class RoleInvite(BaseCog):
         """
         pass
 
-    @roleset.command()
+    @inviteset.command()
     async def add(self, ctx, invite: str, *, role: discord.Role):
         """
         Link a role to an invite for the autorole system.
 
-        Example: `[p]roleset add https://discord.gg/laggron Member`
+        Example: `[p]inviteset add https://discord.gg/laggron Member`
         If this message still shows after using the command, you probably gave a wrong role name.
         If you want to link roles to the main autorole system (user joined with an unknown invite),\
         give `main` instead of a discord invite.
@@ -151,7 +151,7 @@ class RoleInvite(BaseCog):
                         "**WARNING**: This invite is already registered and currently linked to "
                         "the role(s) `{}`.\nIf you continue, this invite will give all roles "
                         "given to the new member. \nIf you want to edit it, first delete the link "
-                        "using `{}roleset remove`.\n\nDo you want to link this invite to {} "
+                        "using `{}inviteset remove`.\n\nDo you want to link this invite to {} "
                         "roles? (yes/no)"
                     ).format("`, `".join(current_roles), ctx.prefix, len(current_roles) + 1)
                 )
@@ -222,7 +222,7 @@ class RoleInvite(BaseCog):
 
         await self._invite_not_found(ctx)
 
-    @roleset.command()
+    @inviteset.command()
     async def remove(self, ctx, invite: str, *, role: discord.Role = None):
         """
         Remove a link in this server
@@ -260,7 +260,7 @@ class RoleInvite(BaseCog):
             if len(bot_invite["roles"]) > 1:
                 message += _(
                     "Remember that you can remove a single role from this list by typing "
-                    "`{}roleset remove {} [role name]`"
+                    "`{}inviteset remove {} [role name]`"
                 ).format(ctx.prefix, invite)
 
             await ctx.send(message)
@@ -294,7 +294,7 @@ class RoleInvite(BaseCog):
                 _("The role `{}` is unlinked from the invite {}").format(role.name, invite)
             )
 
-    @roleset.command()
+    @inviteset.command()
     async def list(self, ctx):
         """
         List all links on this server
@@ -360,7 +360,8 @@ class RoleInvite(BaseCog):
         if embeds == []:
             await ctx.send(
                 _(
-                    "There is nothing set on RoleInvite. Type `{}roleset` for more informations."
+                    "There is nothing set on RoleInvite. "
+                    "Type `{}help inviteset` for more informations."
                 ).format(ctx.prefix)
             )
             return
@@ -373,11 +374,11 @@ class RoleInvite(BaseCog):
             await ctx.send(
                 _(
                     "**Info:** RoleInvite is currently disabled and won't give roles on member "
-                    "join.\nType `{}roleset enable` to enable it."
+                    "join.\nType `{}inviteset enable` to enable it."
                 ).format(ctx.prefix)
             )
 
-    @roleset.command()
+    @inviteset.command()
     async def enable(self, ctx):
         """
         Enable or disabe the autorole system.
@@ -399,7 +400,7 @@ class RoleInvite(BaseCog):
             await ctx.send(
                 _(
                     "The autorole system is now enabled on this server.\n"
-                    "Type `{0.prefix}roleset list` to see what's the current role list.\n"
+                    "Type `{0.prefix}inviteset list` to see what's the current role list.\n"
                     "If the bot lose the `Manage roles` or the `Manage server` permissions "
                 ).format(ctx)
             )
