@@ -51,7 +51,7 @@ class API:
         text: str
             The cleared text
         """
-        return text.replace("://discord.gg/", "://discord.\u200Bgg")
+        return text.replace("://discord.gg/", "://discord.\u200Bgg/")
 
     async def update_invites(self) -> dict:
         """
