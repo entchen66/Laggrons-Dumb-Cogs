@@ -246,6 +246,13 @@ class RoleInvite(BaseCog):
         if role is None or len(bot_invite["roles"]) <= 1:
             # user will unlink the invite from the autorole system
             roles = [discord.utils.get(ctx.guild.roles, id=x) for x in bot_invite["roles"]]
+            roles = [x for x in roles if x]  # removes deleted roles
+            if not roles:  # no more roles after cleaning
+                await self.api.remove_invite(ctx.guild, invite)
+                await ctx.send(
+                    _("That invite lost all of its linked roles and was deleted.")
+                )
+                return
 
             if invite == "main":
                 message = _("You're about to remove all roles linked to the main autorole.\n")
@@ -255,7 +262,7 @@ class RoleInvite(BaseCog):
                 message = _("You're about to remove all roles linked to this invite.\n")
 
             message += _(
-                "```Diff\n" "List of roles:\n\n" "+ {}\n" "```\n\n" "Proceed? (yes/no)\n\n"
+                "List of roles:\n```Diff\n+ {}\n```\n\nProceed? (yes/no)\n\n"
             ).format("\n+ ".join([x.name for x in roles]))
 
             if len(bot_invite["roles"]) > 1:
@@ -265,8 +272,8 @@ class RoleInvite(BaseCog):
                 ).format(ctx.prefix, invite)
 
             await ctx.send(message)
-
             if not await self._check(ctx):  # the user answered no
+                await ctx.send(_("Alright, invite is kept."))
                 return
 
             await self.api.remove_invite(ctx.guild, invite=invite)
@@ -274,7 +281,6 @@ class RoleInvite(BaseCog):
 
         else:
             # user will remove only one role from the invite link
-
             if invite == "main":
                 message = _("main autorole.")
             elif invite == "default":
@@ -288,11 +294,12 @@ class RoleInvite(BaseCog):
             )
 
             if not await self._check(ctx):  # the user answered no
+                await ctx.send(_("Alright, role is kept."))
                 return
 
             await self.api.remove_invite(ctx.guild, invite, [role.id])
             await ctx.send(
-                _("The role `{}` is unlinked from the invite {}").format(role.name, invite)
+                _("The role `{}` is now unlinked from the invite {}").format(role.name, invite)
             )
 
     @inviteset.command()
