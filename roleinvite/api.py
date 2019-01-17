@@ -178,6 +178,7 @@ class API:
             # all roles will be removed
             del invites[invite]
             await self.data.guild(guild).invites.set(invites)
+            return
         else:
             await self.data.guild(guild).invites.set_raw(
                 invite,
