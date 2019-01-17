@@ -10,6 +10,7 @@ from redbot.core import Config
 from redbot.core import checks
 from redbot.core.i18n import cog_i18n, Translator
 from redbot.core.utils.predicates import MessagePredicate
+from redbot.core.utils.chat_formatting import pagify
 
 # creating this before importing other modules allows to import the translator
 _ = Translator("WarnSystem", __file__)
@@ -299,65 +300,43 @@ class RoleInvite(BaseCog):
         """
         List all links on this server
         """
-
         invites = await self.data.guild(ctx.guild).invites()
-        embeds = []
+        text = ""
         to_delete = []
-
         if not ctx.me.guild_permissions.embed_links:
             await ctx.send("I need the `Embed links` permission.")
             return
 
         for i, invite in invites.items():
-
             if all(i != x for x in ["default", "main"]):
                 try:
                     await self.bot.get_invite(i)
                 except discord.errors.NotFound:
                     to_delete.append(i)  # if the invite got deleted
-
+                    continue
             roles = []
             for role in invites[i]["roles"]:
-                roles.append(discord.utils.get(ctx.guild.roles, id=role))
+                role = discord.utils.get(ctx.guild.roles, id=role)
+                if role:
+                    roles.append(role)
+            if not roles:
+                to_delete.append(i)  # no more roles
+                continue
+            roles_names = "+ \n".join([x.name for x in roles])
 
-            embed = discord.Embed()
-            embed.colour = ctx.guild.me.color
-            if i == "main":
-                embed.add_field(
-                    name=_("Roles linked to the main autorole"),
-                    value="\n".join([x.name for x in roles]),
-                )
-                embed.set_footer(
-                    text=_(
-                        "These roles are given if the member joined "
-                        "with an other invite than those linked"
-                    )
-                )
-            elif i == "default":
-                embed.add_field(
-                    name=_("Roles linked to the default autorole"),
-                    value="\n".join([x.name for x in roles]),
-                )
-                embed.set_footer(
-                    text=_(
-                        "These roles are always given to the new members, "
-                        "regardless of the invite used."
-                    )
-                )
+            if i == "default":
+                text += f"{_('Roles linked to the default autorole')}:\n+ {roles_names}\n\n"
+            elif i == "main":
+                text += f"{_('Roles linked to the main autorole')}:\n+ {roles_names}\n\n"
             else:
-                embed.add_field(
-                    name=_("Roles linked to ") + str(i), value="\n".join([x.name for x in roles])
-                )
-                embed.set_footer(
-                    text=_("These roles are given if the user joined using {}").format(i)
-                )
-            embeds.append(embed)
+                i = self.api.escape_invite_links(i)
+                text += f"{_('Roles linked to')} {i}:\n+ {roles_names}\n\n"
 
         for deletion in to_delete:
             del invites[deletion]
-        await self.data.guild(ctx.guild).invites.set(invites)
-
-        if embeds == []:
+        if to_delete:
+            await self.data.guild(ctx.guild).invites.set(invites)
+        if not text:
             await ctx.send(
                 _(
                     "There is nothing set on RoleInvite. "
@@ -365,18 +344,18 @@ class RoleInvite(BaseCog):
                 ).format(ctx.prefix)
             )
             return
-
-        await ctx.send(_("List of invites linked to an autorole on this server:"))
-        for embed in embeds:
-            await ctx.send(embed=embed)
-
         if not await self.data.guild(ctx.guild).enabled():
-            await ctx.send(
-                _(
-                    "**Info:** RoleInvite is currently disabled and won't give roles on member "
-                    "join.\nType `{}inviteset enable` to enable it."
-                ).format(ctx.prefix)
-            )
+            text += _(
+                "**Info:** RoleInvite is currently disabled and won't give roles on member "
+                "join.\nType `{}inviteset enable` to enable it."
+            ).format(ctx.prefix)
+
+        text = (
+            _("List of invites linked to an autorole on this server:") + f"\n```Diff\n{text}\n```"
+        )
+        for page in pagify(text, delims=("\n\n", "\n"), priority=True, escape_mass_mentions=True):
+            # ^ get pages and tries to separate them between paragraphs
+            await ctx.send(page)
 
     @inviteset.command()
     async def enable(self, ctx):

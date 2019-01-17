@@ -37,6 +37,22 @@ class API:
         self.bot = bot
         self.data = config
 
+    def escape_invite_links(self, text: str) -> str:
+        """
+        Return a Discord invite link that won't show an embed
+
+        Parameters
+        ----------
+        text: str
+            The text which needs to have invite links previews removes
+
+        Returns
+        -------
+        text: str
+            The cleared text
+        """
+        return text.replace("://discord.gg/", "://discord.\u200Bgg")
+
     async def update_invites(self) -> dict:
         """
         Update all invites registered to keep their uses count good.
