@@ -71,9 +71,12 @@ class API:
                 if the :attr:`~discord.Permissions.manage_guild` permission was
                 lost on the guild.
         """
-        bot_invites = await self.data.all_guilds()
-        for guild_id in bot_invites:
+        all_bot_invites = await self.data.all_guilds()
+        for guild_id in all_bot_invites:
             guild = self.bot.get_guild(guild_id)
+            if guild is None:
+                continue
+            bot_invites = all_bot_invites[guild.id]["invites"]
 
             try:
                 invites = await guild.invites()
@@ -88,15 +91,24 @@ class API:
                 )
                 continue
 
-            for invite in bot_invites[guild.id]["invites"]:
+            to_remove = []
+            for invite in bot_invites:
                 if all(invite != x for x in ["main", "default"]):
                     invite_object = discord.utils.get(invites, url=invite)
                     if not invite_object:
-                        del bot_invites[invite]
+                        to_remove.append(invite)
                     else:
                         await self.data.guild(guild).invites.set_raw(
                             invite_object.url, "uses", value=invite_object.uses
                         )
+            # removing invites to delete
+            bot_invites = [x for x in bot_invites if x not in to_remove]
+            if to_remove:
+                log.debug(
+                    f"Removing expired invites from guild {guild.name} (ID: {guild.id}):\n"
+                    + ", ".join(to_remove)
+                )
+                await self.data.guild(guild).invites.set(bot_invites)
         return await self.data.all_guilds()
 
     async def add_invite(self, guild: discord.Guild, invite: str, roles: list) -> bool:
