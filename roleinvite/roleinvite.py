@@ -497,8 +497,9 @@ class RoleInvite(BaseCog):
             )
             return
 
-        if not await add_roles("default"):
-            return
+        if "default" in bot_invites:
+            if not await add_roles("default"):
+                return
 
         for invite in bot_invites:
 
@@ -526,8 +527,9 @@ class RoleInvite(BaseCog):
                     )
                     return  # so it won't add "main" roles
 
-        if not await add_roles("main"):
-            return
+        if "main" in bot_invites:
+            if not await add_roles("main"):
+                return
 
     # error handling
     def _set_context(self, data):
