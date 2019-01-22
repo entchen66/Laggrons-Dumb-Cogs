@@ -508,6 +508,11 @@ class RoleInvite(BaseCog):
             invite = discord.utils.get(guild_invites, url=invite)
             if not invite:
                 del bot_invites[invite.url]
+                await self.data.guild(guild).invites.set(bot_invites)
+                log.warning(
+                    f"Invite {invite} is expired and was removed.\n"
+                    f"Guild: {guild.name} (ID: {guild.id})"
+                )
             else:
                 if invite.uses > bot_invites[invite.url]["uses"]:
                     # the invite has more uses than what we registered before
