@@ -209,7 +209,7 @@ class RoleInvite(BaseCog):
                     return
                 await self.api.add_invite(ctx.guild, invite.url, [role.id])
                 await ctx.send(
-                    _("The role `{}` is now linked to the invite {}").format(
+                    _("The role `{}` is now linked to the invite `{}`").format(
                         role.name, self.api.escape_invite_links(invite.url)
                     )
                 )
@@ -240,7 +240,7 @@ class RoleInvite(BaseCog):
             roles = [discord.utils.get(ctx.guild.roles, id=x) for x in bot_invite["roles"]]
             roles = [x for x in roles if x]  # removes deleted roles
             if not roles:  # no more roles after cleaning
-                await self.api.remove_invite(ctx.guild, invite)
+                await self.api.remove_invite(ctx.guild, f"http://discord.gg/{invite}")
                 await ctx.send(_("That invite lost all of its linked roles and was deleted."))
                 return
 
@@ -266,10 +266,10 @@ class RoleInvite(BaseCog):
                 await ctx.send(_("Alright, invite is kept."))
                 return
 
-            await self.api.remove_invite(ctx.guild, invite=invite)
+            await self.api.remove_invite(ctx.guild, invite=f"http://discord.gg/{invite}")
             await ctx.send(
-                _("The invite {} has been removed from the list.").format(
-                    self.api.escape_invite_links(invite)
+                _("The invite `{}` has been removed from the list.").format(
+                    self.api.escape_invite_links(f"http://discord.gg/{invite}")
                 )
             )
 
@@ -280,7 +280,7 @@ class RoleInvite(BaseCog):
             elif invite == "default":
                 message = _("default autorole.")
             else:
-                message = _("invite {}.").format(self.api.escape_invite_links(invite))
+                message = _("invite `{}`.").format(self.api.escape_invite_links(invite))
             await ctx.send(
                 _("You're about to unlink the `{}` role from the {}\nProceed? (yes/no)").format(
                     role.name, message
