@@ -102,7 +102,7 @@ class API:
                             invite_object.url, "uses", value=invite_object.uses
                         )
             # removing invites to delete
-            bot_invites = [x for x in bot_invites if x not in to_remove]
+            bot_invites = {x: y for x, y in bot_invites.items() if x not in to_remove}
             if to_remove:
                 log.debug(
                     f"Removing expired invites from guild {guild.name} (ID: {guild.id}):\n"
