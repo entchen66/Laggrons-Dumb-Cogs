@@ -387,21 +387,63 @@ class RoleInvite(BaseCog):
 
     @commands.command(hidden=True)
     @checks.is_owner()
-    async def roleinviteinfo(self, ctx):
+    async def roleinviteinfo(self, ctx, sentry: str = None):
         """
         Get informations about the cog.
+
+        Type `sentry` after your command to modify its status.
         """
 
-        sentry = _("enabled") if await self.bot.db.enable_sentry() else _("disabled")
+        current_status = await self.data.enable_sentry()
+        status = lambda x: (_("enable"), _("enabled")) if x else (_("disable"), _("disabled"))
+        if sentry is not None and "sentry" in sentry:
+            await ctx.send(
+                _(
+                    "You're about to {} error logging. Are you sure you want to do this? Type "
+                    "`yes` to confirm."
+                ).format(status(not current_status)[0])
+            )
+            predicate = MessagePredicate.yes_or_no(ctx)
+            try:
+                await self.bot.wait_for("message", timeout=60, check=predicate)
+            except asyncio.TimeoutError:
+                await ctx.send(_("Request timed out."))
+            else:
+                if predicate.result:
+                    await self.data.enable_sentry.set(not current_status)
+                    if not current_status:
+                        # now enabled
+                        self.sentry.enable()
+                        await ctx.send(
+                            _(
+                                "Upcoming errors will be reported automatically for a faster fix. "
+                                "Thank you for helping me with the development process!"
+                            )
+                        )
+                    else:
+                        # disabled
+                        self.sentry.disable()
+                        await ctx.send(_("Error logging has been disabled."))
+                    log.info(
+                        f"Sentry error reporting was {status(not current_status)[1]} "
+                        "on this instance."
+                    )
+                else:
+                    await ctx.send(
+                        _("Okay, error logging will stay {}.").format(status(current_status)[1])
+                    )
+                return
+
         message = _(
             "Laggron's Dumb Cogs V3 - roleinvite\n\n"
             "Version: {0.__version__}\n"
             "Author: {0.__author__}\n"
-            "Sentry error reporting: {1}\n\n"
+            "Sentry error reporting: {1} (type `{2}roleinviteinfo sentry` to change this)\n\n"
             "Github repository: https://github.com/retke/Laggrons-Dumb-Cogs/tree/v3\n"
             "Discord server: https://discord.gg/AVzjfpR\n"
-            "Documentation: http://laggrons-dumb-cogs.readthedocs.io/"
-        ).format(self, sentry)
+            "Documentation: http://laggrons-dumb-cogs.readthedocs.io/\n\n"
+            "Support my work on Patreon: https://www.patreon.com/retke"
+        ).format(self, status(current_status)[1], ctx.prefix)
         await ctx.send(message)
 
     @commands.command()
