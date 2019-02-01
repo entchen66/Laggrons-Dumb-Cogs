@@ -1,5 +1,3 @@
-**If you are looking for the V3 Cogs, please switch to [the v3 branch](https://github.com/retke/Laggrons-Dumb-Cogs/tree/v3).**
-
 # Laggron's dumb cogs
 
 ![](https://github.com/retke/Laggrons-Dumb-Cogs/blob/master/.github/RESSOURCES/BANNERS/Base_banner.png)
@@ -14,7 +12,7 @@ If you like these cogs, please consider donating to help me code better quality 
 
 Type the following command (if not responding, make sure you are the bot owner, the bot has access to your channel and the cog `downloader.py` is loaded (`[p]load downloader` if not):
 
-`[p]cog repo add Laggrons-Dumb-Cogs https://github.com/retke/Laggrons-Dumb-Cogs`
+`[p]cog repo add Laggrons-Dumb-Cogs https://github.com/retke/Laggrons-Dumb-Cogs@master`
 
 Then to install a cog type this command:
 
